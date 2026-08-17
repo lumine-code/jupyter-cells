@@ -1,0 +1,4 @@
+.marker.marker-jupyter-cells {
+  z-index: 13;
+  background-color: var(--ui-site-color-4);
+}

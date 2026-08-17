@@ -11,7 +11,7 @@ A `# %%` comment splits a plain source file into runnable cells — the script t
 - **Navigation**: moves the cursor between cells, and selects or extends the selection cell by cell.
 - **Reordering**: swaps a cell with its neighbour above or below, inventing the boundary marker where the file's top needs one.
 - **Folding**: folds the current cell, or everything except it.
-- **Boundary lines**: draws a line on every marker row, live with the setting and customisable from your stylesheet.
+- **Boundary lines**: draws a line on every marker row, live with the setting and customisable from your stylesheet, and shows the same boundaries on the scrollbar and minimap via the marker hub.
 - **Notebook import and export**: opens an `.ipynb` as a marker file — rendering its saved results inline when jupyter-repl is present — and writes a marker file back out as a notebook.
 - **Code lenses**: offers Run Cell and Run All Above links above each marker through the code-lens package.
 - **Markdown cells**: a `# %% md` cell renders as markdown instead of executing.
@@ -57,6 +57,7 @@ The boundary line drawn on marker rows can be adjusted in the `styles.css` file,
 
 - [`jupyter.cells`](docs/jupyter.cells.md): provided to answer cell ranges, types, and boundary positions — to the scrollbar marker layer, and to jupyter-repl's own run paths.
 - `code-lens.provider`: provided to render Run Cell and Run All Above links above each cell marker.
+- `marker.layer`: provided to draw the cell boundaries on the editor's overview maps (scrollbar, minimap).
 - `jupyter.execution`: consumed to run the computed cells through jupyter-repl's kernels and result bubbles.
 - `jupyter.kernel`: consumed to stamp the running kernel's spec into an exported notebook.
 

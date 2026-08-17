@@ -8,7 +8,7 @@ const exists = (rel) => fs.existsSync(path.join(root, rel));
 // This package was extracted from jupyter-repl, which used to own the whole
 // cell layer. The guards below pin the boundary that made the split worth it:
 // the keymap carries exactly the three run bindings that moved, the services
-// are the two consumed and two provided contracts, and nothing here reaches
+// are the two consumed and three provided contracts, and nothing here reaches
 // for a kernel.
 describe("jupyter-cells package assets", () => {
   it("ships plain CommonJS with no build step", () => {
@@ -48,6 +48,7 @@ describe("jupyter-cells package assets", () => {
     expect(pkg.consumedServices["jupyter.kernel"].versions["^1.0.0"]).toBe("consumeJupyterKernel");
     expect(pkg.providedServices["jupyter.cells"].versions["1.0.0"]).toBe("provideJupyterCells");
     expect(pkg.providedServices["code-lens.provider"].versions["1.0.0"]).toBe("provideCodeLens");
+    expect(pkg.providedServices["marker.layer"].versions["1.0.0"]).toBe("provideMarkerLayer");
     // The retired name must not resurface.
     expect(pkg.providedServices["jupyter.breakpoints"]).toBeUndefined();
   });
