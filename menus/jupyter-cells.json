@@ -1,0 +1,113 @@
+{
+  "menu": [
+    {
+      "label": "Packages",
+      "submenu": [
+        {
+          "label": "Jupyter Cells",
+          "submenu": [
+            {
+              "label": "Run",
+              "submenu": [
+                {
+                  "label": "Run Cell",
+                  "command": "jupyter-cells:run-cell"
+                },
+                {
+                  "label": "Run Cell and Move Down",
+                  "command": "jupyter-cells:run-cell-and-move-down"
+                },
+                {
+                  "label": "Run All",
+                  "command": "jupyter-cells:run-all"
+                },
+                {
+                  "label": "Run All Above",
+                  "command": "jupyter-cells:run-all-above"
+                },
+                {
+                  "label": "Recalculate All",
+                  "command": "jupyter-cells:recalculate-all"
+                },
+                {
+                  "label": "Recalculate All Above",
+                  "command": "jupyter-cells:recalculate-all-above"
+                }
+              ]
+            },
+            {
+              "type": "separator"
+            },
+            {
+              "label": "Go to Next Cell",
+              "command": "jupyter-cells:go-to-next-cell"
+            },
+            {
+              "label": "Go to Previous Cell",
+              "command": "jupyter-cells:go-to-previous-cell"
+            },
+            {
+              "type": "separator"
+            },
+            {
+              "label": "Select Cell",
+              "command": "jupyter-cells:select-cell"
+            },
+            {
+              "label": "Select Previous Cell",
+              "command": "jupyter-cells:select-previous-cell"
+            },
+            {
+              "label": "Select Next Cell",
+              "command": "jupyter-cells:select-next-cell"
+            },
+            {
+              "type": "separator"
+            },
+            {
+              "label": "Move Cell Up",
+              "command": "jupyter-cells:move-cell-up"
+            },
+            {
+              "label": "Move Cell Down",
+              "command": "jupyter-cells:move-cell-down"
+            },
+            {
+              "label": "Fold Current Cell",
+              "command": "jupyter-cells:fold-current-cell"
+            },
+            {
+              "label": "Fold All but Current Cell",
+              "command": "jupyter-cells:fold-all-but-current-cell"
+            },
+            {
+              "type": "separator"
+            },
+            {
+              "label": "Import Notebook",
+              "command": "jupyter-cells:import-notebook"
+            },
+            {
+              "label": "Export Notebook",
+              "command": "jupyter-cells:export-notebook"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "context-menu": {
+    ".tree-view .file[data-name$=\".ipynb\"]": [
+      {
+        "type": "separator"
+      },
+      {
+        "label": "Import Notebook",
+        "command": "jupyter-cells:import-notebook"
+      },
+      {
+        "type": "separator"
+      }
+    ]
+  }
+}

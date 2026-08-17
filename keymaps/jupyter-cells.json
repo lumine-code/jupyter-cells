@@ -1,0 +1,11 @@
+{
+  "lumine-workspace lumine-text-editor:not([mini]):not(lumine-dock lumine-text-editor)": {
+    // Not alt-enter: that is the cross-editor quick-fix keystroke, and
+    // intentions binds it at lumine-text-editor:not([mini]) as its only command
+    // and its only key. This block is more specific, so it would silently take
+    // it in every editor that is not in a dock, leaving intentions palette-only.
+    "alt-shift-enter": "jupyter-cells:run-cell",
+    "cmdorctrl-alt-shift-enter": "jupyter-cells:run-cell-and-move-down",
+    "cmdorctrl-shift-enter": "jupyter-cells:run-all"
+  }
+}
