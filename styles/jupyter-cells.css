@@ -1,0 +1,11 @@
+/* The boundary line drawn on each `%%` marker row. The color is a hook first:
+   override --jupyter-cells-breakpoint-color in your styles.css to restyle it. */
+.line.jupyter-cells-breakpoint::before {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  left: 0;
+  background: var(--jupyter-cells-breakpoint-color, var(--base-border-color));
+  opacity: 0.95;
+}
