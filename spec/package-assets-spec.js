@@ -65,7 +65,7 @@ describe("jupyter-cells package assets", () => {
   });
 
   it("binds exactly the three run keystrokes that moved here", () => {
-    const raw = read("keymaps/jupyter-cells.json").replace(/^\s*\/\/.*$/gm, "");
+    const raw = read("keymaps/main.json").replace(/^\s*\/\/.*$/gm, "");
     const keymap = JSON.parse(raw);
     const selectors = Object.keys(keymap);
     expect(selectors).toEqual([
@@ -81,7 +81,7 @@ describe("jupyter-cells package assets", () => {
   });
 
   it("keeps its commands in one Packages submenu, fencing only the context menu", () => {
-    const menu = JSON.parse(read("menus/jupyter-cells.json"));
+    const menu = JSON.parse(read("menus/main.json"));
     const packages = menu.menu.find((item) => item.label === "Packages");
     const submenu = packages.submenu.find((item) => item.label === "Jupyter Cells");
     // No separator opens or closes the submenu, and none doubles up.
