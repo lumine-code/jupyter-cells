@@ -48,7 +48,7 @@ The boundary line drawn on marker rows can be adjusted in the `styles.css` file,
 
 ```css
 .line.jupyter-cells-breakpoint::before {
-  --jupyter-cells-breakpoint-color: var(--text-color-info);
+  --jupyter-cells-breakpoint-color: var(--accent-color);
   height: 2px;
 }
 ```
