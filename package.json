@@ -83,6 +83,7 @@
     "codeLenses": {
       "title": "Code Lenses",
       "description": "Show Run Cell and Run All Above links above each cell marker. Needs the code-lens package, and jupyter-repl to run anything. Also settable per language in scoped settings.",
+      "scopeResolution": "grammar",
       "type": "boolean",
       "default": false
     },
