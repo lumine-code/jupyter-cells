@@ -13,15 +13,14 @@ describe("notebook export", () => {
     if (pane) await pane.destroyItem(editor, true);
   });
 
-  it("owns its save dialog with the source editor", async () => {
-    const choosePath = spyOn(lumine.workspace, "showSaveDialogForPaneItem").and.returnValue(
+  it("opens a save dialog for the source editor's notebook name", async () => {
+    const choosePath = spyOn(lumine.window, "showSaveDialog").and.returnValue(
       Promise.resolve({ canceled: true }),
     );
 
     await exportNotebook(editor);
 
-    expect(choosePath.calls.mostRecent().args[0]).toBe(editor);
-    expect(choosePath.calls.mostRecent().args[1]).toEqual(
+    expect(choosePath.calls.mostRecent().args[0]).toEqual(
       jasmine.objectContaining({
         title: editor.getTitle(),
         defaultPath: jasmine.stringMatching(/\.ipynb$/),
