@@ -6,15 +6,15 @@ A `# %%` comment splits a plain source file into runnable cells — the script t
 
 ## Features
 
-- **Cell markers**: recognizes `%%` comments in every grammar's own comment syntax, plus `<codecell>` tags and `In[n]` prompts from exported notebooks.
+- **Cell markers**: recognizes runs of two or more `%` characters in every grammar's own comment syntax, plus `<codecell>` tags and `In[n]` prompts from exported notebooks. Additional `%` characters express outline depth but still create one cell boundary, and a title may follow any marker.
 - **Run commands**: runs a cell, every cell, or everything above the cursor through the jupyter-repl package, with recalculate variants that restart the kernel first.
 - **Navigation**: moves the cursor between cells, and selects or extends the selection cell by cell.
 - **Reordering**: swaps a cell with its neighbour above or below, inventing the boundary marker where the file's top needs one.
 - **Folding**: folds the current cell, or everything except it.
 - **Boundary lines**: draws a line on every marker row, live with the setting and customisable from your stylesheet, and shows the same boundaries on the scrollbar and minimap via the marker hub.
-- **Notebook import and export**: opens an `.ipynb` as a marker file — rendering its saved results inline when jupyter-repl is present — and writes a marker file back out as a notebook.
+- **Notebook import and export**: opens an `.ipynb` as a marker file — using bare `# %%` code markers and `# %% [markdown]` markdown markers, and rendering saved results inline when jupyter-repl is present — and writes a marker file back out as a notebook.
 - **Code lenses**: offers Run Cell and Run All Above links above each marker through the code-lens package.
-- **Markdown cells**: a `# %% md` cell renders as markdown instead of executing.
+- **Markdown cells**: immediate `[markdown]` or `[md]` metadata marks a cell as markdown; legacy bare `markdown` and `md` remain accepted. A later title does not affect the type, so `# %% markdownish title` is a named code cell.
 
 ## Installation
 

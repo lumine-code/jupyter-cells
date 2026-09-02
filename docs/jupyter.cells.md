@@ -9,7 +9,7 @@ The `# %%` cell model of an editor: ranges, types, and boundary positions.
 | Consumed by | `consumeJupyterCells(cells)` returning a `Disposable`           |
 | Owner       | [`jupyter-cells`](https://github.com/lumine-code/jupyter-cells) |
 
-A cell is a run of buffer between two markers — a comment reading `%%` in the grammar's own comment syntax, a `<codecell>` tag, or an `In[n]` prompt from an exported notebook. This service answers questions about that structure without the consumer owning a scanner of its own: the scrollbar layer draws the boundaries, and jupyter-repl reads cell types where its run paths meet marker files. It absorbed the retired `jupyter.breakpoints` contract, whose members live on here unchanged.
+A cell is a run of buffer between two markers — a comment containing a run of two or more `%` characters in the grammar's own comment syntax, a `<codecell>` tag, or an `In[n]` prompt from an exported notebook. The complete percent run is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` create three cells while exposing increasing outline levels to navigation consumers. This service answers questions about that structure without the consumer owning a scanner of its own: the scrollbar layer draws the boundaries, and jupyter-repl reads cell types where its run paths meet marker files. It absorbed the retired `jupyter.breakpoints` contract, whose members live on here unchanged.
 
 ## Registration
 
@@ -73,6 +73,8 @@ The **end-of-file boundary is excluded** from both. Cells are delimited internal
 `onDidUpdate` fires only while the cell-markers decoration is on — it rides the same scan that paints the boundary lines. It says that something _may_ have changed for that editor; re-query rather than diffing, and do not expect a replay on subscribe.
 
 `getMetadataForRow` answers `"codecell"` for a file with no markers, for multilanguage grammars, and for everything above the first marker — the absence of a marker is an answer, not an error. An editor with no buffer yields `[]` from the boundary members rather than throwing.
+
+For percent markers, immediate `[markdown]` or `[md]` metadata selects a markdown cell; legacy bare `markdown` and `md` metadata remains accepted. Any text after that metadata is a title and does not change the type. Other immediate text is a code-cell title, so `# %% markdownish notes` remains a code cell. Notebook import writes the unambiguous preferred forms: bare `# %%` for code and `# %% [markdown]` for markdown.
 
 The queries are backed by one marker index per buffer, rebuilt lazily after an edit — asking many times in a row costs one scan, so there is no need to cache answers on the consumer side.
 

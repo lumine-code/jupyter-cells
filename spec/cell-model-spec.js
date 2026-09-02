@@ -1,4 +1,4 @@
-const { getBreakpoints, getCells, getMetadataForRow } = require("../lib/cells");
+const { getBreakpoints, getCells, getMarkerIndex, getMetadataForRow } = require("../lib/cells");
 const { Point } = require("lumine");
 
 // Every query here used to sweep the whole buffer on every call, so a caller
@@ -23,9 +23,43 @@ describe("the cell marker index", () => {
     return editor;
   };
 
-  // `# %% markdown`, not `# %% [markdown]`: the marker regex captures the
-  // bare word, and the bracketed spelling matches as a plain code cell.
+  // The legacy bare markdown spelling remains accepted alongside the preferred
+  // bracketed metadata exercised below.
   const markers = ["# %%", "a = 1", "# %% markdown", "# text", "# %%", "b = 2"].join("\n");
+
+  it("consumes every percent in a named marker while keeping one boundary", async () => {
+    await open(
+      ["# %% Top", "a = 1", "# %%% Child", "b = 2", "# %%%% Grandchild", "c = 3"].join("\n"),
+    );
+
+    const index = getMarkerIndex(editor);
+    expect(
+      index.markers.map(({ start, end }) => editor.getTextInBufferRange([start, end])),
+    ).toEqual(["# %%", "# %%%", "# %%%%"]);
+    expect(getBreakpoints(editor).map((point) => point.row)).toEqual([0, 2, 4, 5]);
+  });
+
+  it("recognizes bracketed markdown metadata before arbitrary titles", async () => {
+    await open(
+      ["# %% [md] Short title", "first", "# %%% [markdown] Nested title", "second"].join("\n"),
+    );
+
+    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("markdown");
+    expect(getMetadataForRow(editor, new Point(3, 0))).toBe("markdown");
+  });
+
+  it("keeps bare markdown metadata compatible and ignores its title", async () => {
+    await open(["# %% md Short title", "first", "# %% markdown Long title", "second"].join("\n"));
+
+    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("markdown");
+    expect(getMetadataForRow(editor, new Point(3, 0))).toBe("markdown");
+  });
+
+  it("treats a title starting with markdownish as a code cell", async () => {
+    await open("# %% markdownish ordinary title\nvalue = 1\n");
+
+    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("codecell");
+  });
 
   it("scans the buffer once for repeated queries at the same buffer state", async () => {
     await open(markers);
