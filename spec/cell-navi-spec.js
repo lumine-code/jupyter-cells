@@ -1,4 +1,5 @@
 const { nextCell, previousCell, selectCell, moveCellDown } = require("../lib/cell-navi");
+const { getCommentStartString } = require("../lib/cells");
 
 describe("cell navigation", () => {
   let editor;
@@ -58,5 +59,19 @@ describe("cell navigation", () => {
 
     expect(() => nextCell(editor)).not.toThrow();
     expect(editor.getCursorBufferPosition().row).toBe(0);
+  });
+
+  it("looks up an indented line and falls back to a block-comment opener", () => {
+    const getCommentDelimitersForBufferPosition = jasmine
+      .createSpy("getCommentDelimitersForBufferPosition")
+      .and.returnValue({ block: ["/* ", " */"] });
+    const fakeEditor = {
+      getCursorBufferPosition: () => ({ row: 2, column: 11 }),
+      lineTextForBufferRow: () => "    value",
+      getCommentDelimitersForBufferPosition,
+    };
+
+    expect(getCommentStartString(fakeEditor)).toBe("/*");
+    expect(getCommentDelimitersForBufferPosition).toHaveBeenCalledWith([2, 4]);
   });
 });
