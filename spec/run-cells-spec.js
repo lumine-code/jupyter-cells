@@ -39,7 +39,7 @@ function makeExecution({ adapterHandles = false } = {}) {
 }
 
 describe("the cell run commands", () => {
-  let mainModule, editor, disposables;
+  let mainModule, editor, disposables, runtimeRequest;
 
   const markers = ["# %%", "a = 1", "# %% markdown", "# text", "# %%", "b = 2"].join("\n");
 
@@ -47,6 +47,9 @@ describe("the cell run commands", () => {
     jasmine.attachToDOM(lumine.workspace.getElement());
     disposables = new CompositeDisposable();
     lumine.notifications.clear();
+    runtimeRequest = spyOn(lumine.packages, "requestService").and.returnValue(
+      Promise.resolve(true),
+    );
 
     const pack = await lumine.packages.activatePackage(packageRoot);
     mainModule = pack.mainModule;
@@ -82,6 +85,7 @@ describe("the cell run commands", () => {
     await microtasks();
 
     const run = execution.calls.find(([name]) => name === "runBlocks");
+    expect(runtimeRequest).not.toHaveBeenCalled();
     expect(run[1]).toBe(editor);
     expect(run[2]).toEqual([{ code: "a = 1\n", row: 1, cellType: "codecell" }]);
   });
@@ -159,5 +163,6 @@ describe("the cell run commands", () => {
     expect(notifications.length).toBe(1);
     expect(notifications[0].getType()).toBe("warning");
     expect(notifications[0].getMessage()).toContain("jupyter-repl");
+    expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
   });
 });

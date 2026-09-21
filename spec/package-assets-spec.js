@@ -46,6 +46,8 @@ describe("jupyter-cells package assets", () => {
       "consumeJupyterExecution",
     );
     expect(pkg.consumedServices["jupyter.kernel"].versions["^1.0.0"]).toBe("consumeJupyterKernel");
+    expect(pkg.consumedServices["jupyter.execution"].activation).toBeUndefined();
+    expect(pkg.consumedServices["jupyter.kernel"].activation).toBeUndefined();
     expect(pkg.providedServices["jupyter.cells"].versions["1.0.0"]).toBe("provideJupyterCells");
     expect(pkg.providedServices["code-lens.provider"].versions["1.0.0"]).toBe("provideCodeLens");
     expect(pkg.providedServices["marker.layer"].versions["1.0.0"]).toBe("provideMarkerLayer");

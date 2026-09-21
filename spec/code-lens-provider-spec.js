@@ -3,12 +3,8 @@ const { CompositeDisposable } = require("lumine");
 
 const packageRoot = path.join(__dirname, "..");
 
-async function microtasks(count = 20) {
-  for (let i = 0; i < count; i++) await Promise.resolve();
-}
-
 describe("the code-lens provider", () => {
-  let mainModule, provider, editor, disposables, runs;
+  let mainModule, provider, editor, disposables, runs, runtimeRequest;
 
   const markers = ["# %%", "a = 1", "# %% markdown", "# text", "# %%", "b = 2"].join("\n");
 
@@ -18,6 +14,9 @@ describe("the code-lens provider", () => {
     mainModule = pack.mainModule;
     provider = mainModule.provideCodeLens();
     lumine.config.set("jupyter-cells.codeLenses", true);
+    runtimeRequest = spyOn(lumine.packages, "requestService").and.returnValue(
+      Promise.resolve(true),
+    );
 
     await lumine.packages.activatePackage("language-python");
     editor = await lumine.workspace.open("code-lens-cells.py");
@@ -74,6 +73,7 @@ describe("the code-lens provider", () => {
     expect(runs.length).toBe(1);
     expect(runs[0].target).toBe(editor);
     expect(runs[0].blocks).toEqual([{ code: "a = 1\n", row: 1, cellType: "codecell" }]);
+    expect(runtimeRequest).not.toHaveBeenCalled();
   });
 
   it("runs everything above the clicked marker as one batch", async () => {
@@ -94,31 +94,25 @@ describe("the code-lens provider", () => {
     expect(provider.codeLenses(editor)).toBeNull();
   });
 
-  it("emits nothing without the execution service, so no link can be dead", async () => {
+  it("keeps the links visible without the execution service and explains a failed request", async () => {
     disposables.dispose();
-    await microtasks();
-    expect(provider.codeLenses(editor)).toBeNull();
+    const lenses = provider.codeLenses(editor);
+    const runCell = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell");
+
+    await runCell.execute();
+
+    expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
+    expect(lumine.notifications.getNotifications().at(-1).getMessage()).toContain("jupyter-repl");
   });
 
-  it("invalidates when the setting flips and when the service arrives", async () => {
+  it("invalidates when the setting flips", async () => {
     const invalidated = jasmine.createSpy("invalidated");
     disposables.add(provider.onDidInvalidate(invalidated));
 
     lumine.config.set("jupyter-cells.codeLenses", false);
     expect(invalidated.calls.count()).toBe(1);
 
-    disposables.add(
-      mainModule.consumeJupyterExecution({
-        runAdapter: () => false,
-        runBlocks: () => Promise.resolve(true),
-        moveDown() {},
-        clearResults() {},
-        restartKernel() {},
-        importOutputs() {},
-        markdownToOutput: () => ({}),
-      }),
-    );
-    expect(invalidated.calls.count()).toBe(2);
+    expect(invalidated.calls.count()).toBe(1);
   });
 
   it("emits nothing for a file with no markers", async () => {

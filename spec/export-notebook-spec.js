@@ -5,18 +5,23 @@ const path = require("path");
 const { exportNotebook, buildNotebook } = require("../lib/export-notebook");
 const { _loadNotebook } = require("../lib/import-notebook");
 const { parseNotebook } = require("../lib/nbformat");
+const services = require("../lib/services");
 
 describe("notebook export", () => {
-  let editor;
+  let editor, temporaryDirectory;
 
   beforeEach(async () => {
     jasmine.attachToDOM(lumine.workspace.getElement());
     editor = await lumine.workspace.open();
+    services.setKernel(null);
+    temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-cells-export-"));
   });
 
   afterEach(async () => {
+    services.setKernel(null);
     const pane = lumine.workspace.paneForItem(editor);
     if (pane) await pane.destroyItem(editor, true);
+    await fs.rm(temporaryDirectory, { recursive: true, force: true });
   });
 
   it("opens a save dialog for the source editor's notebook name", async () => {
@@ -33,13 +38,31 @@ describe("notebook export", () => {
       }),
     );
   });
+
+  it("requests jupyter.kernel before reading notebook metadata", async () => {
+    const kernelSpec = { name: "python3", display_name: "Python 3", language: "python" };
+    const request = spyOn(lumine.packages, "requestService").and.callFake(async () => {
+      services.setKernel({ getActiveKernel: () => ({ kernelSpec }) });
+      return true;
+    });
+    const filePath = path.join(temporaryDirectory, "export.ipynb");
+    spyOn(lumine.window, "showSaveDialog").and.resolveTo({ canceled: false, filePath });
+
+    await exportNotebook(editor);
+
+    expect(request).toHaveBeenCalledWith("jupyter.kernel", "^1.0.0");
+    expect(JSON.parse(await fs.readFile(filePath, "utf8")).metadata.kernelspec).toEqual(kernelSpec);
+  });
 });
 
 describe("notebook marker round-trip", () => {
-  let temporaryDirectory;
+  let runtimeRequest, temporaryDirectory;
 
   beforeEach(async () => {
     await lumine.packages.activatePackage("language-python");
+    runtimeRequest = spyOn(lumine.packages, "requestService").and.returnValue(
+      Promise.resolve(true),
+    );
     temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-cells-"));
   });
 
@@ -71,7 +94,7 @@ describe("notebook marker round-trip", () => {
     };
     await fs.writeFile(notebookPath, JSON.stringify(notebook));
 
-    await _loadNotebook(notebookPath, false);
+    await _loadNotebook(notebookPath, true);
     const editor = lumine.workspace.getActiveTextEditor();
     const languageMode = editor.getBuffer().getLanguageMode();
     await languageMode.ready;
@@ -88,5 +111,6 @@ describe("notebook marker round-trip", () => {
     const roundTripped = parseNotebook(buildNotebook(editor));
     expect(roundTripped.cells.map((cell) => cell.cell_type)).toEqual(["code", "markdown"]);
     expect(roundTripped.cells.map((cell) => cell.source)).toEqual(["value = 1", "Heading\nbody"]);
+    expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
   });
 });
