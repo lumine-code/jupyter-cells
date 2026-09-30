@@ -58,6 +58,21 @@ describe("settled typed cell descriptors", () => {
     ]);
   });
 
+  it("preserves typed structure and body ranges around an incomplete Python statement", async () => {
+    await open(
+      "# %% First\ngood = 1\n# %% [markdown]\n# Heading\n# %% [raw]\nraw <bytes>\n# %% [code]\nvalue =\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => [cell.cellType, cell.source, cell.range.start.row])).toEqual([
+      ["code", "good = 1", 1],
+      ["markdown", "# Heading", 3],
+      ["raw", "raw <bytes>", 5],
+      ["code", "value =\n", 7],
+    ]);
+  });
+
   it("shares one scan for concurrent readers and invalidates synchronously on edits", async () => {
     await open("# %%\na = 1\n# %% [markdown]\n# text");
     const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
@@ -174,6 +189,63 @@ describe("settled typed cell descriptors", () => {
       [3, 9],
     ]);
     expect(blocks[0].code).toBe("%%time -n 3\nvalue = 1");
+  });
+
+  it("reconstructs partial magic headers and reads only the selected physical body", async () => {
+    await open("# %%\n%%bash -e\nfirst\nsecond\n", "language-ipython", "cell-model.ipy");
+    const header = await cells.getExecutionBlocks(editor, [
+      [1, 2],
+      [1, 6],
+    ]);
+    expect(header[0].code).toBe("%%bash -e\n");
+    const reads = spyOn(editor, "getTextInBufferRange").and.callThrough();
+    const selected = await cells.getExecutionBlocks(editor, [
+      [1, 4],
+      [3, 2],
+    ]);
+    expect(selected[0].code).toBe("%%bash -e\nfirst\nse");
+    expect(reads.calls.count()).toBe(2);
+    expect((await cells.getExecutionBlocks(editor))[0].code).toBe("%%bash -e\nfirst\nsecond\n");
+  });
+
+  it("keeps leading blank rows and trailing comments inside the logical Python magic", async () => {
+    await open("# %%\n%%time\n\n\nvalue = 1\n# trailing\n", "language-ipython", "cell-model.ipy");
+    expect(
+      (
+        await cells.getExecutionBlocks(editor, [
+          [2, 0],
+          [4, 0],
+        ])
+      )[0].code,
+    ).toBe("%%time\n\n\n");
+    expect(
+      (
+        await cells.getExecutionBlocks(editor, [
+          [5, 0],
+          [6, 0],
+        ])
+      )[0].code,
+    ).toBe("%%time\n# trailing\n");
+    expect(
+      (
+        await cells.getExecutionBlocks(editor, [
+          [5, 4],
+          [5, 4],
+        ])
+      )[0].code,
+    ).toBe("%%time\n\n\nvalue = 1\n# trailing\n");
+  });
+
+  it("prepares a comment-only Python magic body with its complete header", async () => {
+    await open("# %%\n%%time\n# only comment\n", "language-ipython", "cell-model.ipy");
+    expect(
+      (
+        await cells.getExecutionBlocks(editor, [
+          [2, 0],
+          [3, 0],
+        ])
+      )[0].code,
+    ).toBe("%%time\n# only comment\n");
   });
 
   it("preserves the complete shell-magic header when a fragment body is selected", async () => {
