@@ -152,8 +152,12 @@ describe("the code-lens provider", () => {
       resume = resolve;
     });
     spyOn(require("../lib/services"), "requestExecution").and.returnValue(deferred);
-    const pending = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell").execute();
-    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    const runCell = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell");
+    const pending = runCell.execute();
+    editor.getBuffer().delete([
+      [0, 0],
+      [2, 0],
+    ]);
     resume(execution);
     await pending;
     expect(runs).toEqual([]);

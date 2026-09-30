@@ -196,7 +196,10 @@ describe("the cell run commands", () => {
     });
     spyOn(require("../lib/services"), "requestExecution").and.returnValue(deferred);
     const pending = require("../lib/run-cells").runCell(editor);
-    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    editor.getBuffer().delete([
+      [0, 0],
+      [2, 0],
+    ]);
     resume(execution);
     await pending;
     expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);

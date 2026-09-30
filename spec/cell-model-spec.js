@@ -255,10 +255,16 @@ describe("settled typed cell descriptors", () => {
       resume = resolve;
     });
     spyOn(mode, "atTransactionEnd").and.returnValue(deferred);
-    const selected = [[1, 0], [2, 0]];
+    const selected = [
+      [1, 0],
+      [2, 0],
+    ];
     const pendingBlocks = cells.getExecutionBlocks(editor, selected);
     const pendingDescriptors = cells.getCellDescriptors(editor, selected);
-    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    editor.getBuffer().delete([
+      [0, 0],
+      [2, 0],
+    ]);
     resume(await settle());
     expect(await pendingBlocks).toEqual([]);
     expect(await pendingDescriptors).toEqual([]);
