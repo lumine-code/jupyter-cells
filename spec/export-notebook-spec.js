@@ -58,6 +58,50 @@ describe("notebook export", () => {
 describe("notebook marker round-trip", () => {
   let runtimeRequest, temporaryDirectory;
 
+  async function writeNotebook(name, original) {
+    const notebookPath = path.join(temporaryDirectory, name + ".ipynb");
+    const serialized = JSON.stringify({
+      cells: original,
+      metadata: { language_info: { name: "python" } },
+      nbformat: 4,
+      nbformat_minor: 5,
+    });
+    await fs.writeFile(notebookPath, serialized);
+    return { notebookPath, serialized };
+  }
+
+  function originalCell(cellType, source) {
+    return cellType === "code"
+      ? { cell_type: cellType, source, outputs: [], metadata: {}, execution_count: null }
+      : { cell_type: cellType, source, metadata: {} };
+  }
+
+  async function pauseImportValidation(notebookPath) {
+    let reach, resume;
+    const reached = new Promise((resolve) => {
+      reach = resolve;
+    });
+    const gate = new Promise((resolve) => {
+      resume = resolve;
+    });
+    const assign = lumine.grammars.assignLanguageMode.bind(lumine.grammars);
+    spyOn(lumine.grammars, "assignLanguageMode").and.callFake((buffer, ...args) => {
+      const result = assign(buffer, ...args);
+      const mode = buffer.getLanguageMode();
+      if (jasmine.isSpy(mode.atTransactionEnd)) return result;
+      const settle = mode.atTransactionEnd.bind(mode);
+      spyOn(mode, "atTransactionEnd").and.callFake(async () => {
+        const transaction = await settle();
+        reach(lumine.workspace.getTextEditors().find((editor) => editor.getBuffer() === buffer));
+        await gate;
+        return transaction;
+      });
+      return result;
+    });
+    const pending = _loadNotebook(notebookPath, true);
+    return { editor: await reached, pending, resume };
+  }
+
   beforeEach(async () => {
     await lumine.packages.activatePackage("language-python");
     await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
@@ -152,5 +196,102 @@ describe("notebook marker round-trip", () => {
     expect(result.cells.map((cell) => cell.source)).toEqual(
       original.map((cell) => cell.source.join("")),
     );
+  });
+
+  for (const cellType of ["raw", "markdown", "code"]) {
+    it(`refuses a reserved delimiter inside an imported ${cellType} payload`, async () => {
+      const original = [
+        originalCell("code", "first = 1"),
+        originalCell(cellType, "before\n# %% [raw] Payload\nbytes"),
+        originalCell("code", "after = 1"),
+      ];
+      const { notebookPath, serialized } = await writeNotebook("collision-" + cellType, original);
+      const previous = await lumine.workspace.open();
+      previous.setText("existing source");
+      const warnings = spyOn(lumine.notifications, "addWarning");
+
+      await _loadNotebook(notebookPath, true);
+
+      expect(lumine.workspace.getTextEditors()).toEqual([previous]);
+      expect(previous.isDestroyed()).toBe(false);
+      expect(previous.getText()).toBe("existing source");
+      const [message, options] = warnings.calls.mostRecent().args;
+      expect(message).toContain("source cell 2, line 2");
+      expect(options.detail).toContain("Open the notebook directly");
+      expect(runtimeRequest).not.toHaveBeenCalled();
+      expect(await fs.readFile(notebookPath, "utf8")).toBe(serialized);
+    });
+  }
+
+  it("keeps a marker inside a Python string as code during import validation", async () => {
+    const original = [
+      originalCell("code", 'value = """\n# %% [raw]\ninside string\n"""\n'),
+      originalCell("markdown", "# Heading\n"),
+      originalCell("raw", "unchanged bytes\n"),
+    ];
+    const { notebookPath } = await writeNotebook("string-marker", original);
+    const warnings = spyOn(lumine.notifications, "addWarning");
+
+    await _loadNotebook(notebookPath);
+
+    const result = parseNotebook(await buildNotebook(lumine.workspace.getActiveTextEditor()));
+    expect(result.cells.map((cell) => [cell.cell_type, cell.source])).toEqual(
+      original.map((cell) => [cell.cell_type, cell.source]),
+    );
+    expect(warnings).not.toHaveBeenCalled();
+  });
+
+  it("preserves edits made while the import's descriptor validation is awaiting its tree", async () => {
+    const { notebookPath, serialized } = await writeNotebook("edited-collision", [
+      originalCell("raw", "before\n# %% [raw]\nafter"),
+    ]);
+    const warnings = spyOn(lumine.notifications, "addWarning");
+    const request = await pauseImportValidation(notebookPath);
+    try {
+      request.editor.setText("User edits remain here");
+    } finally {
+      request.resume();
+    }
+    await request.pending;
+
+    expect(request.editor.isDestroyed()).toBe(false);
+    expect(request.editor.getText()).toBe("User edits remain here");
+    const [message, options] = warnings.calls.mostRecent().args;
+    expect(message).toContain("source editor changed");
+    expect(options.detail).toContain("Your edits were preserved");
+    expect(runtimeRequest).not.toHaveBeenCalled();
+    expect(await fs.readFile(notebookPath, "utf8")).toBe(serialized);
+  });
+
+  it("keeps an import editor that was given a save path during validation", async () => {
+    const { notebookPath } = await writeNotebook("saved-collision", [
+      originalCell("markdown", "before\n# %% [code]\nafter = 1"),
+    ]);
+    const request = await pauseImportValidation(notebookPath);
+    const savePath = path.join(temporaryDirectory, "user-saved.ipy");
+    try {
+      request.editor.getBuffer().setPath(savePath);
+    } finally {
+      request.resume();
+    }
+    await request.pending;
+
+    expect(request.editor.isDestroyed()).toBe(false);
+    expect(request.editor.getPath()).toBe(savePath);
+    expect(runtimeRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite or close an existing editor if a fresh import editor is declined", async () => {
+    const { notebookPath } = await writeNotebook("existing-editor", [
+      originalCell("raw", "payload"),
+    ]);
+    const previous = await lumine.workspace.open();
+    previous.setText("existing source");
+    spyOn(lumine.workspace, "open").and.resolveTo(previous);
+
+    await _loadNotebook(notebookPath);
+
+    expect(previous.isDestroyed()).toBe(false);
+    expect(previous.getText()).toBe("existing source");
   });
 });
