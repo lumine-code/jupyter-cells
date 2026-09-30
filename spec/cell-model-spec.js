@@ -73,6 +73,21 @@ describe("settled typed cell descriptors", () => {
     ]);
   });
 
+  it("recovers typed cells following an incomplete top-level assignment", async () => {
+    await open(
+      "# %% Broken\nvalue =\n# %% [markdown]\n# Heading\n# %% [raw]\nraw <bytes>\n# %% [code]\ngood = 1\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => [cell.cellType, cell.source, cell.range.start.row])).toEqual([
+      ["code", "value =", 1],
+      ["markdown", "# Heading", 3],
+      ["raw", "raw <bytes>", 5],
+      ["code", "good = 1\n", 7],
+    ]);
+  });
+
   it("shares one scan for concurrent readers and invalidates synchronously on edits", async () => {
     await open("# %%\na = 1\n# %% [markdown]\n# text");
     const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
