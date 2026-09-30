@@ -281,6 +281,31 @@ describe("notebook marker round-trip", () => {
     expect(runtimeRequest).not.toHaveBeenCalled();
   });
 
+  it("preserves a grammar override chosen while import validation awaits its tree", async () => {
+    const { notebookPath, serialized } = await writeNotebook("grammar-choice", [
+      originalCell("markdown", "# Heading\n"),
+    ]);
+    const warnings = spyOn(lumine.notifications, "addWarning");
+    const request = await pauseImportValidation(notebookPath);
+    const source = request.editor.getText();
+    try {
+      expect(lumine.grammars.assignLanguageMode(request.editor.getBuffer(), "source.python")).toBe(
+        true,
+      );
+    } finally {
+      request.resume();
+    }
+    await request.pending;
+
+    expect(request.editor.isDestroyed()).toBe(false);
+    expect(request.editor.getText()).toBe(source);
+    expect(request.editor.getGrammar().scopeName).toBe("source.python");
+    expect(lumine.grammars.getAssignedLanguageId(request.editor.getBuffer())).toBe("source.python");
+    expect(warnings.calls.mostRecent().args[0]).toContain("source editor changed");
+    expect(runtimeRequest).not.toHaveBeenCalled();
+    expect(await fs.readFile(notebookPath, "utf8")).toBe(serialized);
+  });
+
   it("does not overwrite or close an existing editor if a fresh import editor is declined", async () => {
     const { notebookPath } = await writeNotebook("existing-editor", [
       originalCell("raw", "payload"),
