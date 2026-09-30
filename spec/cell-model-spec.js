@@ -241,4 +241,29 @@ describe("settled typed cell descriptors", () => {
       subscription.dispose();
     }
   });
+
+  it("cancels specified ranges if an edit shifts another cell into their coordinates", async () => {
+    await open(
+      "# %% Harmless\nharmless()\n# %% Code\ndangerous()\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const mode = editor.getBuffer().getLanguageMode();
+    const settle = mode.atTransactionEnd.bind(mode);
+    let resume;
+    const deferred = new Promise((resolve) => {
+      resume = resolve;
+    });
+    spyOn(mode, "atTransactionEnd").and.returnValue(deferred);
+    const selected = [[1, 0], [2, 0]];
+    const pendingBlocks = cells.getExecutionBlocks(editor, selected);
+    const pendingDescriptors = cells.getCellDescriptors(editor, selected);
+    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    resume(await settle());
+    expect(await pendingBlocks).toEqual([]);
+    expect(await pendingDescriptors).toEqual([]);
+    expect((await cells.getExecutionBlocks(editor)).map((block) => block.code)).toEqual([
+      "dangerous()\n",
+    ]);
+  });
 });

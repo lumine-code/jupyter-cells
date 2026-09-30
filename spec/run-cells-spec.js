@@ -185,4 +185,20 @@ describe("the cell run commands", () => {
       expect(runs[0][2].map((block) => block.code)).toEqual(["dangerous()\n"]);
     }
   });
+
+  it("cancels a cell run if source changes while the execution service is pending", async () => {
+    editor.setText("# %% Harmless\nharmless()\n# %% Code\ndangerous()\n");
+    editor.setCursorBufferPosition([1, 0]);
+    const execution = consume(makeExecution());
+    let resume;
+    const deferred = new Promise((resolve) => {
+      resume = resolve;
+    });
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(deferred);
+    const pending = require("../lib/run-cells").runCell(editor);
+    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    resume(execution);
+    await pending;
+    expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);
+  });
 });

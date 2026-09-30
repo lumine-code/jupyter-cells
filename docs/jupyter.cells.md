@@ -44,6 +44,8 @@ type JupyterCells = {
 
 `getExecutionBlocks` uses the same snapshot and omits whitespace-only bodies. Its row is the last meaningful source row for an inline result. Selecting part of a cell-magic body prepends its complete original header, including arguments. An empty range inside a magic selects that whole magic. Raw remains a typed block; execution consumers skip it before kernel selection, while Markdown renders locally without a kernel.
 
+An empty descriptor body has no execution block. Skip it instead of passing its empty range back to preparation, where an empty range means a cursor locator and can coincide with the following header. Both asynchronous methods capture specified range coordinates at invocation and return `[]` if the buffer changes while awaiting the index; they never reinterpret those coordinates against a shifted document. Omitting the range permits a bulk query to refresh safely to the latest revision.
+
 The synchronous geometry members read the current metadata index. `getCell` locates the cell around a point or cursor; `getCurrentCell` also understands fenced code blocks in Markdown-family grammars. An IPython index still catching up returns `null` or `[]`, starts one shared asynchronous refresh and announces the settled result through `onDidUpdate`; await a descriptor query before using geometry for an action. Geometry covers the body through the following boundary, whereas descriptor source excludes the structural separator.
 
 ## Boundary drawing

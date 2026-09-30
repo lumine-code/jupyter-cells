@@ -138,4 +138,24 @@ describe("the code-lens provider", () => {
       expect(runs[0].blocks.map((block) => block.code)).toEqual(["dangerous()\n"]);
     }
   });
+
+  it("cancels a lens run if its source shifts while service activation is pending", async () => {
+    editor.setText("# %% Harmless\nharmless()\n# %% Code\ndangerous()\n");
+    const lenses = await provider.codeLenses(editor);
+    const execution = {
+      runBlocks: (target, blocks) => {
+        runs.push({ target, blocks });
+      },
+    };
+    let resume;
+    const deferred = new Promise((resolve) => {
+      resume = resolve;
+    });
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(deferred);
+    const pending = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell").execute();
+    editor.getBuffer().delete([[0, 0], [2, 0]]);
+    resume(execution);
+    await pending;
+    expect(runs).toEqual([]);
+  });
 });
