@@ -49,8 +49,8 @@ describe("the code-lens provider", () => {
     for (const open of lumine.workspace.getTextEditors()) open.destroy();
   });
 
-  it("offers Run Cell on every marker, and Run All Above where something is above", () => {
-    const lenses = provider.codeLenses(editor);
+  it("offers Run Cell on every marker, and Run All Above where something is above", async () => {
+    const lenses = await provider.codeLenses(editor);
     const titlesByRow = {};
     for (const lens of lenses) {
       const row = lens.range[0][0];
@@ -65,19 +65,19 @@ describe("the code-lens provider", () => {
 
   it("runs the cell below the clicked marker, wherever the cursor is", async () => {
     editor.setCursorBufferPosition([5, 0]);
-    const lenses = provider.codeLenses(editor);
+    const lenses = await provider.codeLenses(editor);
     const runCell = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell");
 
     await runCell.execute();
 
     expect(runs.length).toBe(1);
     expect(runs[0].target).toBe(editor);
-    expect(runs[0].blocks).toEqual([{ code: "a = 1\n", row: 1, cellType: "codecell" }]);
+    expect(runs[0].blocks).toEqual([{ code: "a = 1", row: 1, cellType: "code" }]);
     expect(runtimeRequest).not.toHaveBeenCalled();
   });
 
   it("runs everything above the clicked marker as one batch", async () => {
-    const lenses = provider.codeLenses(editor);
+    const lenses = await provider.codeLenses(editor);
     const runAbove = lenses.find(
       (lens) => lens.range[0][0] === 4 && lens.title === "Run All Above",
     );
@@ -86,17 +86,17 @@ describe("the code-lens provider", () => {
 
     expect(runs.length).toBe(1);
     expect(runs[0].blocks.length).toBe(2);
-    expect(runs[0].blocks.map((block) => block.cellType)).toEqual(["codecell", "markdown"]);
+    expect(runs[0].blocks.map((block) => block.cellType)).toEqual(["code", "markdown"]);
   });
 
-  it("emits nothing while the setting is off", () => {
+  it("emits nothing while the setting is off", async () => {
     lumine.config.set("jupyter-cells.codeLenses", false);
-    expect(provider.codeLenses(editor)).toBeNull();
+    expect(await provider.codeLenses(editor)).toBeNull();
   });
 
   it("keeps the links visible without the execution service and explains a failed request", async () => {
     disposables.dispose();
-    const lenses = provider.codeLenses(editor);
+    const lenses = await provider.codeLenses(editor);
     const runCell = lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell");
 
     await runCell.execute();
@@ -121,6 +121,6 @@ describe("the code-lens provider", () => {
     if (languageMode.atTransactionEnd) {
       await languageMode.atTransactionEnd();
     }
-    expect(provider.codeLenses(editor)).toBeNull();
+    expect(await provider.codeLenses(editor)).toBeNull();
   });
 });

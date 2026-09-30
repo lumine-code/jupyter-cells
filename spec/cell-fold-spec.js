@@ -27,7 +27,7 @@ describe("cell folding", () => {
     editor.setCursorBufferPosition([1, 0]);
     const before = editor.getSelectedBufferRanges();
 
-    expect(() => foldAllButCurrentCell(editor)).not.toThrow();
+    await foldAllButCurrentCell(editor);
     expect(editor.isFoldedAtBufferRow(0)).toBe(false);
     expect(editor.getSelectedBufferRanges()).toEqual(before);
   });
@@ -39,7 +39,7 @@ describe("cell folding", () => {
     editor.setCursorBufferPosition([3, 0]);
     const before = editor.getSelectedBufferRanges();
 
-    foldAllButCurrentCell(editor);
+    await foldAllButCurrentCell(editor);
 
     expect(editor.isFoldedAtBufferRow(0)).toBe(true);
     expect(editor.isFoldedAtBufferRow(6)).toBe(true);
@@ -51,7 +51,7 @@ describe("cell folding", () => {
     await openPython("a = 1\nb = 2\n#%%\nc = 3\nd = 4\n");
     editor.setCursorBufferPosition([3, 0]);
 
-    foldCurrentCell(editor);
+    await foldCurrentCell(editor);
 
     expect(editor.isFoldedAtBufferRow(3)).toBe(true);
   });

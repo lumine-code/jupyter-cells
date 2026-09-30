@@ -60,6 +60,7 @@ describe("notebook marker round-trip", () => {
 
   beforeEach(async () => {
     await lumine.packages.activatePackage("language-python");
+    await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
     runtimeRequest = spyOn(lumine.packages, "requestService").and.returnValue(
       Promise.resolve(true),
     );
@@ -104,13 +105,52 @@ describe("notebook marker round-trip", () => {
       "# %%",
       "value = 1",
       "# %% [markdown]",
-      "# Heading",
-      "# body",
+      "Heading",
+      "body",
     ]);
 
-    const roundTripped = parseNotebook(buildNotebook(editor));
+    const roundTripped = parseNotebook(await buildNotebook(editor));
     expect(roundTripped.cells.map((cell) => cell.cell_type)).toEqual(["code", "markdown"]);
     expect(roundTripped.cells.map((cell) => cell.source)).toEqual(["value = 1", "Heading\nbody"]);
     expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
+    expect(editor.getGrammar().scopeName).toBe("source.python.ipy");
+    expect(editor.getSaveDialogOptions().defaultPath).toBe(
+      path.join(temporaryDirectory, "markers.ipy"),
+    );
+  });
+
+  it("round-trips literal Markdown, raw, empty cells and trailing source newlines", async () => {
+    const original = [
+      {
+        cell_type: "code",
+        source: ["value = 1\n"],
+        outputs: [],
+        metadata: {},
+        execution_count: null,
+      },
+      { cell_type: "markdown", source: ["# Heading\n", "    indented\n"], metadata: {} },
+      { cell_type: "raw", source: ["literal <bytes>\n"], metadata: {} },
+      { cell_type: "markdown", source: [], metadata: {} },
+      { cell_type: "code", source: ["last\n"], outputs: [], metadata: {}, execution_count: null },
+    ];
+    const notebookPath = path.join(temporaryDirectory, "literal.ipynb");
+    await fs.writeFile(
+      notebookPath,
+      JSON.stringify({
+        cells: original,
+        metadata: { language_info: { name: "python" } },
+        nbformat: 4,
+        nbformat_minor: 5,
+      }),
+    );
+    await _loadNotebook(notebookPath);
+    const editor = lumine.workspace.getActiveTextEditor();
+    const result = parseNotebook(await buildNotebook(editor));
+    expect(result.cells.map((cell) => cell.cell_type)).toEqual(
+      original.map((cell) => cell.cell_type),
+    );
+    expect(result.cells.map((cell) => cell.source)).toEqual(
+      original.map((cell) => cell.source.join("")),
+    );
   });
 });

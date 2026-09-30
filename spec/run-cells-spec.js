@@ -87,7 +87,7 @@ describe("the cell run commands", () => {
     const run = execution.calls.find(([name]) => name === "runBlocks");
     expect(runtimeRequest).not.toHaveBeenCalled();
     expect(run[1]).toBe(editor);
-    expect(run[2]).toEqual([{ code: "a = 1\n", row: 1, cellType: "codecell" }]);
+    expect(run[2]).toEqual([{ code: "a = 1", row: 1, cellType: "code" }]);
   });
 
   it("captures the cell before moving down, and moves before running", async () => {
@@ -103,7 +103,7 @@ describe("the cell run commands", () => {
     const run = execution.calls.find(([name]) => name === "runBlocks");
     // The block was captured from the cell the cursor was in, wherever the
     // move put it afterwards.
-    expect(run[2][0].code).toBe("a = 1\n");
+    expect(run[2][0].code).toBe("a = 1");
   });
 
   it("stops at the adapter when a notebook pane claims the run", async () => {
@@ -124,7 +124,7 @@ describe("the cell run commands", () => {
     await microtasks();
 
     const run = execution.calls.find(([name]) => name === "runBlocks");
-    expect(run[2].map((block) => block.cellType)).toEqual(["codecell", "markdown", "codecell"]);
+    expect(run[2].map((block) => block.cellType)).toEqual(["code", "markdown", "code"]);
     // The comment prefix of the markdown cell is stripped before it is handed over.
     expect(run[2][1].code).toContain("text");
     expect(run[2][1].code).not.toContain("#");
@@ -139,7 +139,7 @@ describe("the cell run commands", () => {
 
     const run = execution.calls.find(([name]) => name === "runBlocks");
     expect(run[2].length).toBe(2);
-    expect(run[2][0].code).toBe("a = 1\n");
+    expect(run[2][0].code).toBe("a = 1");
   });
 
   it("clears, restarts, and reruns for recalculate-all", async () => {

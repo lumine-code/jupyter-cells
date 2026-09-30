@@ -1,136 +1,162 @@
-const { getBreakpoints, getCells, getMarkerIndex, getMetadataForRow } = require("../lib/cells");
-const { Point } = require("lumine");
+const path = require("path");
+const { Point, Range } = require("lumine");
+const cells = require("../lib/cells");
 
-// Every query here used to sweep the whole buffer on every call, so a caller
-// walking each row of a file paid O(rows²) and froze the window for seconds.
-// These pin the property that keeps it linear — the marker scan happens once
-// per buffer state — and the semantics alongside it, since both are invisible
-// in the results.
-describe("the cell marker index", () => {
-  let editor;
-
-  // Cell markers are comments, so they need a grammar that defines one, and
-  // getBreakpoints reads scopes — which only exist once the buffer has been
-  // tokenized. Without the wait every file reads as a single cell.
-  const open = async (text) => {
-    await lumine.packages.activatePackage("language-python");
-    editor = await lumine.workspace.open("cell-model.py");
-    editor.getBuffer().setText(text);
-    const languageMode = editor.getBuffer().getLanguageMode();
-    if (languageMode.atTransactionEnd) {
-      await languageMode.atTransactionEnd();
-    }
+describe("settled typed cell descriptors", () => {
+  let editor, registration;
+  const open = async (text, grammar = "language-python", file = "cell-model.py") => {
+    await lumine.packages.activatePackage(
+      grammar === "language-ipython" ? path.resolve(__dirname, "..", "..", grammar) : grammar,
+    );
+    editor = await lumine.workspace.open(file);
+    editor.setText(text);
+    await editor.getBuffer().getLanguageMode().atTransactionEnd?.();
     return editor;
   };
+  afterEach(() => {
+    registration?.dispose();
+    registration = null;
+    editor?.destroy();
+  });
 
-  // The legacy bare markdown spelling remains accepted alongside the preferred
-  // bracketed metadata exercised below.
-  const markers = ["# %%", "a = 1", "# %% markdown", "# text", "# %%", "b = 2"].join("\n");
-
-  it("consumes every percent in a named marker while keeping one boundary", async () => {
-    await open(
-      ["# %% Top", "a = 1", "# %%% Child", "b = 2", "# %%%% Grandchild", "c = 3"].join("\n"),
-    );
-
-    const index = getMarkerIndex(editor);
+  it("consumes a complete percent run and metadata before titles", async () => {
+    await open("# %% Top\na = 1\n# %%% [md] Child\n# text\n# %%%% [raw] Raw title\n# bytes");
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => cell.cellType)).toEqual(["code", "markdown", "raw"]);
+    expect(descriptors.map((cell) => cell.source)).toEqual(["a = 1", "text", "bytes"]);
+    const index = cells.getMarkerIndex(editor);
     expect(
       index.markers.map(({ start, end }) => editor.getTextInBufferRange([start, end])),
-    ).toEqual(["# %%", "# %%%", "# %%%%"]);
-    expect(getBreakpoints(editor).map((point) => point.row)).toEqual([0, 2, 4, 5]);
+    ).toEqual(["# %%", "# %%% [md]", "# %%%% [raw]"]);
+    expect(cells.getBreakpoints(editor).map((position) => position.row)).toEqual([0, 2, 4, 5]);
   });
 
-  it("recognizes bracketed markdown metadata before arbitrary titles", async () => {
+  it("accepts legacy bare Markdown without stealing ordinary titles", async () => {
     await open(
-      ["# %% [md] Short title", "first", "# %%% [markdown] Nested title", "second"].join("\n"),
+      "# %% md Short title\n# first\n# %% markdown Long title\n# second\n# %% markdownish notes\nvalue = 1",
     );
-
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("markdown");
-    expect(getMetadataForRow(editor, new Point(3, 0))).toBe("markdown");
+    expect((await cells.getCellDescriptors(editor)).map((cell) => cell.cellType)).toEqual([
+      "markdown",
+      "markdown",
+      "code",
+    ]);
   });
 
-  it("keeps bare markdown metadata compatible and ignores its title", async () => {
-    await open(["# %% md Short title", "first", "# %% markdown Long title", "second"].join("\n"));
-
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("markdown");
-    expect(getMetadataForRow(editor, new Point(3, 0))).toBe("markdown");
-  });
-
-  it("treats a title starting with markdownish as a code cell", async () => {
-    await open("# %% markdownish ordinary title\nvalue = 1\n");
-
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("codecell");
-  });
-
-  it("scans the buffer once for repeated queries at the same buffer state", async () => {
-    await open(markers);
+  it("shares one scan for concurrent readers and invalidates synchronously on edits", async () => {
+    await open("# %%\na = 1\n# %% [markdown]\n# text");
     const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
-
-    for (let row = 0; row <= 5; row++) {
-      getMetadataForRow(editor, new Point(row, 0));
-    }
-    getBreakpoints(editor);
-
+    await Promise.all(
+      Array.from({ length: 20 }, () => cells.getCellDescriptors(editor, new Range([1, 0], [1, 0]))),
+    );
+    cells.getBreakpoints(editor);
     expect(scans.calls.count()).toBe(1);
-  });
-
-  it("rescans after the buffer changes", async () => {
-    // TextBuffer carries no version counter, so the index invalidates on a
-    // change subscription. Getting that wrong is invisible until an edit
-    // moves a marker: every later query answers from the pre-edit scan.
-    await open(markers);
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("codecell");
-    const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
-
-    // Turn the marker above row 1 into a markdown one, so that row's type
-    // flips. The wait is for the re-tokenization the edit starts: the marker
-    // regex is built from the grammar's comment string, which is
-    // unavailable until it finishes.
     editor.getBuffer().setTextInRange(
       [
         [0, 0],
         [0, 4],
       ],
-      "# %% markdown",
+      "# %% [raw]",
     );
-    const languageMode = editor.getBuffer().getLanguageMode();
-    if (languageMode.atTransactionEnd) {
-      await languageMode.atTransactionEnd();
-    }
-
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("markdown");
-    expect(scans.calls.count()).toBe(1);
+    const descriptor = (await cells.getCellDescriptors(editor, new Range([1, 0], [1, 0])))[0];
+    expect(descriptor.cellType).toBe("raw");
+    expect(scans.calls.count()).toBe(2);
   });
 
-  it("reports each row's cell type from the nearest marker above it", async () => {
-    await open(markers);
-    expect(getMetadataForRow(editor, new Point(0, 0))).toBe("codecell");
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("codecell");
-    expect(getMetadataForRow(editor, new Point(2, 0))).toBe("markdown");
-    expect(getMetadataForRow(editor, new Point(3, 0))).toBe("markdown");
-    expect(getMetadataForRow(editor, new Point(4, 0))).toBe("codecell");
-    expect(getMetadataForRow(editor, new Point(5, 0))).toBe("codecell");
-  });
-
-  it("reports codecell for a buffer with no markers at all", async () => {
-    await open("a = 1\nb = 2\n");
-    expect(getMetadataForRow(editor, new Point(1, 0))).toBe("codecell");
-    expect(getBreakpoints(editor).length).toBe(1); // the end position alone
-  });
-
-  it("finds every marker as a breakpoint, in buffer order", async () => {
-    await open(markers);
-    const rows = getBreakpoints(editor).map((point) => point.row);
-    expect(rows).toEqual([0, 2, 4, 5]); // three markers, then the end position
-  });
-
-  it("splits the buffer into cells at those markers", async () => {
-    await open(markers);
-    // The leading marker on row 0 opens an empty range, which getCells drops.
-    const ranges = getCells(editor).map((cell) => [cell.start.row, cell.end.row]);
-    expect(ranges).toEqual([
+  it("splits and clips a cross-cell selection before preparing execution", async () => {
+    await open("# %%\na = 1\n# %% [markdown]\n# text\n# %% [raw]\n# bytes");
+    const blocks = await cells.getExecutionBlocks(editor, [
       [1, 2],
-      [3, 4],
       [5, 5],
     ]);
+    expect(blocks.map((block) => block.cellType)).toEqual(["code", "markdown", "raw"]);
+    expect(blocks.map((block) => block.code)).toEqual(["= 1", "text", "byt"]);
+  });
+
+  it("reads literal IPython types from the root tree without a regex scan", async () => {
+    await open(
+      '# %%\nvalue = """\n# %% [raw]\ninside string\n"""\n# %% [markdown]\n# Heading\n  indented\n# %% [raw]\nraw <bytes>',
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => cell.cellType)).toEqual(["code", "markdown", "raw"]);
+    expect(descriptors[0].source).toContain("# %% [raw]\ninside string");
+    expect(descriptors[1].source).toBe("# Heading\n  indented");
+    expect(descriptors[2].source).toBe("raw <bytes>");
+    expect(scans).not.toHaveBeenCalled();
+    const onHeader = await cells.getCellDescriptors(editor, [
+      [5, 0],
+      [5, 0],
+    ]);
+    expect(onHeader[0]).toEqual(descriptors[1]);
+  });
+
+  it("never serves stale IPython geometry while a new transaction is pending", async () => {
+    await open("# %%\nvalue = 1", "language-ipython", "cell-model.ipy");
+    await cells.getCellDescriptors(editor);
+    editor.getBuffer().setTextInRange(
+      [
+        [0, 0],
+        [0, 4],
+      ],
+      "# %% [raw]",
+    );
+    expect(cells.getCell(editor, new Point(1, 0))).toBeNull();
+    expect(cells.getBreakpoints(editor)).toEqual([]);
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors[0].cellType).toBe("raw");
+    expect(cells.getCell(editor, new Point(1, 0))).not.toBeNull();
+  });
+
+  it("preserves empty explicit cells and source newlines separately from separators", async () => {
+    await open(
+      "# %%\nline\n\n# %% [markdown]\n\n# %% [raw]\nlast\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => cell.source)).toEqual(["line\n", "", "last\n"]);
+    expect((await cells.getExecutionBlocks(editor)).map((block) => block.cellType)).toEqual([
+      "code",
+      "raw",
+    ]);
+  });
+
+  it("prepends complete magic headers for selections and expands an empty magic selection", async () => {
+    await open(
+      "# %%\n%%writefile -a notes.txt\nfirst\nsecond\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const selected = await cells.getExecutionBlocks(editor, [
+      [3, 0],
+      [3, 6],
+    ]);
+    expect(selected).toEqual([
+      { code: "%%writefile -a notes.txt\nsecond", row: 3, cellType: "code" },
+    ]);
+    const current = await cells.getExecutionBlocks(editor, [
+      [3, 2],
+      [3, 2],
+    ]);
+    expect(current[0].code).toBe("%%writefile -a notes.txt\nfirst\nsecond\n");
+  });
+
+  it("treats fragment marker comments as code and preserves a first magic header", async () => {
+    await lumine.packages.activatePackage("language-python");
+    editor = lumine.workspace.buildTextEditor();
+    registration = lumine.textEditors.add(editor, { role: "fragment" });
+    editor.setText("\n%%time -n 3\n# %% [markdown]\nvalue = 1");
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python");
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.length).toBe(1);
+    expect(descriptors[0].cellType).toBe("code");
+    expect(cells.getBreakpoints(editor)).toEqual([editor.getBuffer().getEndPosition()]);
+    const blocks = await cells.getExecutionBlocks(editor, [
+      [3, 0],
+      [3, 9],
+    ]);
+    expect(blocks[0].code).toBe("%%time -n 3\nvalue = 1");
   });
 });

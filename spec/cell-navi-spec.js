@@ -1,11 +1,16 @@
 const { nextCell, previousCell, selectCell, moveCellDown } = require("../lib/cell-navi");
-const { getCommentStartString } = require("../lib/cells");
+const { getCommentStartString, getCellDescriptors } = require("../lib/cells");
+const path = require("path");
 
 describe("cell navigation", () => {
   let editor;
 
   const open = async (grammarPackage, fileName, text) => {
-    await lumine.packages.activatePackage(grammarPackage);
+    await lumine.packages.activatePackage(
+      grammarPackage === "language-ipython"
+        ? path.resolve(__dirname, "..", "..", grammarPackage)
+        : grammarPackage,
+    );
     editor = await lumine.workspace.open(fileName);
     editor.getBuffer().setText(text);
     const languageMode = editor.getBuffer().getLanguageMode();
@@ -19,12 +24,12 @@ describe("cell navigation", () => {
     await open("language-python", "cell-navi.py", "a = 1\n# %%\nb = 2\n# %%\nc = 3\n");
     editor.setCursorBufferPosition([0, 0]);
 
-    nextCell(editor);
+    await nextCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(2);
-    nextCell(editor);
+    await nextCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(4);
 
-    previousCell(editor);
+    await previousCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(2);
   });
 
@@ -32,11 +37,29 @@ describe("cell navigation", () => {
     await open("language-python", "cell-navi.py", "a = 1\n# %%\nb = 2\nc = 3\n# %%\nd = 4\n");
     editor.setCursorBufferPosition([2, 0]);
 
-    selectCell(editor);
+    await selectCell(editor);
 
     const range = editor.getSelectedBufferRange();
     expect(range.start.row).toBe(1);
     expect(range.end.row).toBe(4);
+  });
+
+  it("uses AST boundaries for IPython navigation and selects a markerless code file", async () => {
+    await open(
+      "language-ipython",
+      "cell-navi.ipy",
+      'value = """\n# %% [raw]\ninside\n"""\n# %% [markdown]\n# Heading\n# %% [raw]\nbytes',
+    );
+    editor.setCursorBufferPosition([0, 0]);
+    await nextCell(editor);
+    expect(editor.getCursorBufferPosition().row).toBe(5);
+    await nextCell(editor);
+    expect(editor.getCursorBufferPosition().row).toBe(7);
+    await previousCell(editor);
+    expect(editor.getCursorBufferPosition().row).toBe(5);
+    editor.setText("value = 1\n");
+    await selectCell(editor);
+    expect(editor.getSelectedText()).toBe("value = 1\n");
   });
 
   it("invents the boundary marker in the grammar's own comment syntax", async () => {
@@ -46,10 +69,25 @@ describe("cell navigation", () => {
     await open("language-javascript", "cell-navi-example.js", "a = 1;\n// %%\nb = 2;\n");
     editor.setCursorBufferPosition([0, 0]);
 
-    moveCellDown(editor);
+    await moveCellDown(editor);
 
     expect(editor.getText()).toContain("// %%\na = 1;");
     expect(editor.getText()).not.toContain("# %%");
+  });
+
+  it("preserves typed source and its trailing newlines when moving a cell", async () => {
+    await open(
+      "language-ipython",
+      "cell-navi.ipy",
+      "# %%\nvalue = 1\n\n# %% [markdown]\n# Heading\n# %% [raw]\nbytes",
+    );
+    const before = await getCellDescriptors(editor);
+    editor.setCursorBufferPosition([4, 0]);
+    await moveCellDown(editor);
+    const after = await getCellDescriptors(editor);
+    expect(after.map((cell) => [cell.cellType, cell.source])).toEqual(
+      [before[0], before[2], before[1]].map((cell) => [cell.cellType, cell.source]),
+    );
   });
 
   it("does nothing, without throwing, in a grammar with no comment syntax", async () => {
@@ -57,7 +95,7 @@ describe("cell navigation", () => {
     editor.getBuffer().setText("a\nb\nc\n");
     editor.setCursorBufferPosition([0, 0]);
 
-    expect(() => nextCell(editor)).not.toThrow();
+    await nextCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(0);
   });
 

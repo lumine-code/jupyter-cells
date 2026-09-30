@@ -1,6 +1,6 @@
 # jupyter.cells
 
-The `# %%` cell model of an editor: ranges, types, and boundary positions.
+The cell model of an editor: settled ranges, source, types, and boundaries.
 
 |             |                                                                 |
 | ----------- | --------------------------------------------------------------- |
@@ -9,11 +9,9 @@ The `# %%` cell model of an editor: ranges, types, and boundary positions.
 | Consumed by | `consumeJupyterCells(cells)` returning a `Disposable`           |
 | Owner       | [`jupyter-cells`](https://github.com/lumine-code/jupyter-cells) |
 
-A cell is a run of buffer between two markers — a comment containing a run of two or more `%` characters in the grammar's own comment syntax, a `<codecell>` tag, or an `In[n]` prompt from an exported notebook. The complete percent run is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` create three cells while exposing increasing outline levels to navigation consumers. This service answers questions about that structure without the consumer owning a scanner of its own: the scrollbar layer draws the boundaries, and jupyter-repl reads cell types where its run paths meet marker files. It absorbed the retired `jupyter.breakpoints` contract, whose members live on here unchanged.
+An IPython document uses its existing root syntax tree to find cell markers, literal Markdown and raw cells. A marker inside a string, a bracketed expression, an indented suite or a continued line is not a boundary. Other source languages retain percent markers in their own comment syntax, legacy `<codecell>` tags and exported `In[n]` prompts. Fragment editors inside a notebook remain one code cell: the notebook owns their type and structure.
 
 ## Registration
-
-In your `package.json`:
 
 ```json
 {
@@ -28,28 +26,31 @@ In your `package.json`:
 ## Contract
 
 ```ts
+type CellType = "code" | "markdown" | "raw";
+type CellDescriptor = { range: Range; cellType: CellType; source: string };
+type ExecutionBlock = { code: string; row: number; cellType: CellType };
 type JupyterCells = {
-  getCell(editor: TextEditor, point?: Point): Range;
-  getCurrentCell(editor: TextEditor): Range;
-  getMetadataForRow(editor: TextEditor, point: Point): "codecell" | "markdown";
-  removeCommentsMarkdownCell(editor: TextEditor, text: string): string;
+  getCellDescriptors(editor: TextEditor, range?: Range): Promise<CellDescriptor[]>;
+  getExecutionBlocks(editor: TextEditor, range?: Range): Promise<ExecutionBlock[]>;
+  getCell(editor: TextEditor, point?: Point): Range | null;
+  getCurrentCell(editor: TextEditor): Range | null;
   getBreakpoints(editor: TextEditor): Point[];
   initBreakpoints(editor: TextEditor): Point[];
   onDidUpdate(callback: (event: { editor: TextEditor; breakpoints: Point[] }) => void): Disposable;
 };
 ```
 
-| Member                                | Description                                                                                    |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `getCell(editor, point)`              | The cell around the point — the cursor when omitted. The whole buffer when there is no marker. |
-| `getCurrentCell(editor)`              | The same at the cursor, but fenced-code-block aware for markdown-family grammars.              |
-| `getMetadataForRow(editor, point)`    | The type of the cell holding the row, from the nearest marker at or above it.                  |
-| `removeCommentsMarkdownCell(e, text)` | A markdown cell's text with the leading comment tokens stripped and de-indented.               |
-| `getBreakpoints(editor)`              | The cell boundaries as buffer positions. `[]` for an editor with none, or with no buffer.      |
-| `initBreakpoints(editor)`             | The same, but `[]` while the user has cell markers switched off. **Use this one to draw.**     |
-| `onDidUpdate(callback)`               | Fires when an editor's boundaries may have changed, carrying that editor's current list.       |
+`getCellDescriptors` waits for the current parse transaction and returns cells in buffer order. Omit the range to read the document; an empty range locates its whole containing cell, including when the point is on a marker header. A nonempty range clips the source of every intersecting cell, preserving their individual types. Descriptor ranges exclude marker headers and the one newline separating a body from the next header. Literal IPython source remains unchanged apart from newline normalization; legacy commented Markdown and raw source has its comment prefixes removed and is de-indented. Empty explicit cells remain descriptors so notebook conversion preserves them.
 
-## Minimal example
+`getExecutionBlocks` uses the same snapshot and omits whitespace-only bodies. Its row is the last meaningful source row for an inline result. Selecting part of a cell-magic body prepends its complete original header, including arguments. An empty range inside a magic selects that whole magic. Raw remains a typed block; execution consumers skip it before kernel selection, while Markdown renders locally without a kernel.
+
+The synchronous geometry members read the current metadata index. `getCell` locates the cell around a point or cursor; `getCurrentCell` also understands fenced code blocks in Markdown-family grammars. An IPython index still catching up returns `null` or `[]`, starts one shared asynchronous refresh and announces the settled result through `onDidUpdate`; await a descriptor query before using geometry for an action. Geometry covers the body through the following boundary, whereas descriptor source excludes the structural separator.
+
+## Boundary drawing
+
+Prefer `initBreakpoints` when drawing: it returns `[]` while `jupyter-cells.cellMarkers` is off. `getBreakpoints` answers real marker positions regardless of that setting. Both exclude the internal end-of-file terminator, and an editor without a buffer yields `[]`.
+
+`onDidUpdate` fires after an index settles and when boundary decorations change. It carries the editor and the currently drawable boundaries; re-query instead of diffing, and do not expect replay when subscribing.
 
 ```js
 module.exports = {
@@ -57,31 +58,19 @@ module.exports = {
     this.cells = cells;
     return cells.onDidUpdate(({ editor }) => this.redraw(editor));
   },
-
-  rowsFor(editor) {
-    return (this.cells?.initBreakpoints(editor) ?? []).map((point) => point.row);
+  async runSelection(editor) {
+    const blocks = await this.cells.getExecutionBlocks(editor, editor.getSelectedBufferRange());
+    return this.execution.runBlocks(editor, blocks);
   },
 };
 ```
 
-## Behavior
+## Markers and caching
 
-**Prefer `initBreakpoints` over `getBreakpoints` when drawing.** They return the same positions, but `initBreakpoints` respects the `jupyter-cells.cellMarkers` setting and returns `[]` when the user has cell markers turned off. Using `getBreakpoints` directly draws markers the user asked not to see; it exists for consumers computing rather than drawing.
+A complete run of two or more percent signs is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` expose increasing outline levels. Preferred types are `# %%`, `# %% [markdown]` and `# %% [raw]`; `[md]` and legacy bare `md`/`markdown` remain accepted. IPython also accepts bare `raw` metadata. Other immediate text is a title, so `# %% markdownish notes` remains code.
 
-The **end-of-file boundary is excluded** from both. Cells are delimited internally by a list that ends with the buffer's end position; the service trims it, so the positions you get are real dividers, not the final terminator. A file with three cells yields two boundaries.
+The metadata index is shared per buffer and settled revision. Concurrent readers share one pending refresh; repeated reads reuse it and point lookups use binary search. It stores positions and types, never syntax-node references or copied source strings. Source is read only for the requested descriptors. Edits invalidate it synchronously, and a changed revision during an asynchronous wait causes a retry.
 
-`onDidUpdate` fires only while the cell-markers decoration is on — it rides the same scan that paints the boundary lines. It says that something _may_ have changed for that editor; re-query rather than diffing, and do not expect a replay on subscribe.
+## Teardown and compatibility
 
-`getMetadataForRow` answers `"codecell"` for a file with no markers, for multilanguage grammars, and for everything above the first marker — the absence of a marker is an answer, not an error. An editor with no buffer yields `[]` from the boundary members rather than throwing.
-
-For percent markers, immediate `[markdown]` or `[md]` metadata selects a markdown cell; legacy bare `markdown` and `md` metadata remains accepted. Any text after that metadata is a title and does not change the type. Other immediate text is a code-cell title, so `# %% markdownish notes` remains a code cell. Notebook import writes the unambiguous preferred forms: bare `# %%` for code and `# %% [markdown]` for markdown.
-
-The queries are backed by one marker index per buffer, rebuilt lazily after an edit — asking many times in a row costs one scan, so there is no need to cache answers on the consumer side.
-
-## Teardown
-
-`consumeJupyterCells` receives the query object for as long as both packages are active. `onDidUpdate` returns a `Disposable`; return it from your consumer method, and clear whatever you drew.
-
-## Versioning
-
-`1.0.0` provided, `^1.0.0` consumed. A change that breaks this shape gets a new service name rather than a new major version, and both sides move in the same release.
+`consumeJupyterCells` receives the object while both packages are active. Dispose update subscriptions and clear whatever you drew when the service leaves. This preproduction contract uses `code`, `markdown` and `raw` throughout; the former metadata/decomment helpers are replaced by descriptors and prepared execution blocks without compatibility aliases.
