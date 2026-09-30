@@ -69,7 +69,7 @@ module.exports = {
 
 ## Markers and caching
 
-A complete run of two or more percent signs is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` expose increasing outline levels. Preferred types are `# %%`, `# %% [markdown]` and `# %% [raw]`; `[md]` and legacy bare `md`/`markdown` remain accepted. IPython also accepts bare `raw` metadata. Other immediate text is a title, so `# %% markdownish notes` remains code.
+A complete run of two or more percent signs is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` expose increasing outline levels. IPython types are `# %%`, `# %% [markdown]` and `# %% [raw]`; `[code]` explicitly selects code and `[md]` abbreviates Markdown. Bare words are titles, so `# %% markdown notes` and `# %% raw Bytes` remain code. Other source languages retain their legacy bare `md`/`markdown` metadata.
 
 The metadata index is shared per buffer and settled revision. Concurrent readers share one pending refresh; repeated reads reuse it and point lookups use binary search. It stores positions and types, never syntax-node references or copied source strings. Source is materialized only when a descriptor's source field is read. Large root traversals yield in bounded chunks, and an edit during a yield discards the unfinished index and retries against the new settled tree. Edits invalidate it synchronously, and a changed revision during an asynchronous wait causes a retry.
 

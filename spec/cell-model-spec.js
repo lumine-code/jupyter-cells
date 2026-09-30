@@ -42,6 +42,22 @@ describe("settled typed cell descriptors", () => {
     ]);
   });
 
+  it("keeps bare IPython type words as titles and accepts explicit code metadata", async () => {
+    await open(
+      "# %% md Short title\nvalue = 1\n# %% markdown Long title\nvalue = 2\n# %% raw Bytes\nvalue = 3\n# %% [code] Explicit\nvalue = 4\n",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => cell.cellType)).toEqual(["code", "code", "code", "code"]);
+    expect(descriptors.map((cell) => cell.source)).toEqual([
+      "value = 1",
+      "value = 2",
+      "value = 3",
+      "value = 4\n",
+    ]);
+  });
+
   it("shares one scan for concurrent readers and invalidates synchronously on edits", async () => {
     await open("# %%\na = 1\n# %% [markdown]\n# text");
     const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
