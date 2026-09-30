@@ -165,4 +165,24 @@ describe("the cell run commands", () => {
     expect(notifications[0].getMessage()).toContain("jupyter-repl");
     expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
   });
+
+  it("keeps empty typed cells inert and runs the following code only once", async () => {
+    await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python.ipy");
+    const execution = consume(makeExecution());
+    for (const metadata of ["[markdown]", "[raw]", ""]) {
+      editor.setText("# %% " + metadata + "\n# %% Code\ndangerous()\n");
+      editor.setCursorBufferPosition([0, 0]);
+      execution.calls.length = 0;
+      await mainModule.provideJupyterCells().getCellDescriptors(editor);
+      dispatch("jupyter-cells:run-cell");
+      await microtasks();
+      expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);
+      dispatch("jupyter-cells:run-all");
+      await microtasks();
+      const runs = execution.calls.filter(([name]) => name === "runBlocks");
+      expect(runs.length).toBe(1);
+      expect(runs[0][2].map((block) => block.code)).toEqual(["dangerous()\n"]);
+    }
+  });
 });

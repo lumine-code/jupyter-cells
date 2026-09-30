@@ -123,4 +123,19 @@ describe("the code-lens provider", () => {
     }
     expect(await provider.codeLenses(editor)).toBeNull();
   });
+
+  it("keeps a Run Cell lens on an empty cell from running the next code cell", async () => {
+    await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python.ipy");
+    for (const metadata of ["[markdown]", "[raw]", ""]) {
+      editor.setText("# %% " + metadata + "\n# %% Code\ndangerous()\n");
+      runs.length = 0;
+      const lenses = await provider.codeLenses(editor);
+      await lenses.find((lens) => lens.range[0][0] === 0 && lens.title === "Run Cell").execute();
+      expect(runs).toEqual([]);
+      await lenses.find((lens) => lens.range[0][0] === 1 && lens.title === "Run Cell").execute();
+      expect(runs.length).toBe(1);
+      expect(runs[0].blocks.map((block) => block.code)).toEqual(["dangerous()\n"]);
+    }
+  });
 });
