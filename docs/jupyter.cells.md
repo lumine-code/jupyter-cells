@@ -40,7 +40,7 @@ type JupyterCells = {
 };
 ```
 
-`getCellDescriptors` waits for the current parse transaction and returns cells in buffer order. Omit the range to read the document; an empty range locates its whole containing cell, including when the point is on a marker header. A nonempty range clips the source of every intersecting cell, preserving their individual types. Descriptor ranges exclude marker headers and the one newline separating a body from the next header. Literal IPython source remains unchanged apart from newline normalization; legacy commented Markdown and raw source has its comment prefixes removed and is de-indented. Empty explicit cells remain descriptors so notebook conversion preserves them.
+`getCellDescriptors` waits for the current parse transaction and returns cells in buffer order. Omit the range to read the document; an empty range locates its whole containing cell, including when the point is on a marker header. A nonempty range clips the source of every intersecting cell, preserving their individual types. Descriptor ranges exclude marker headers and the one newline separating a body from the next header. The source field is read lazily and retains the descriptor's original text revision even if the editor changes before it is read, so classifying a cursor does not copy a large body. Literal IPython source remains unchanged apart from newline normalization; legacy commented Markdown and raw source has its comment prefixes removed and is de-indented. Empty explicit cells remain descriptors so notebook conversion preserves them.
 
 `getExecutionBlocks` uses the same snapshot and omits whitespace-only bodies. Its row is the last meaningful source row for an inline result. Selecting part of a cell-magic body prepends its complete original header, including arguments. An empty range inside a magic selects that whole magic. Raw remains a typed block; execution consumers skip it before kernel selection, while Markdown renders locally without a kernel.
 
@@ -69,7 +69,7 @@ module.exports = {
 
 A complete run of two or more percent signs is one boundary: `# %% Title`, `# %%% Child` and `# %%%% Grandchild` expose increasing outline levels. Preferred types are `# %%`, `# %% [markdown]` and `# %% [raw]`; `[md]` and legacy bare `md`/`markdown` remain accepted. IPython also accepts bare `raw` metadata. Other immediate text is a title, so `# %% markdownish notes` remains code.
 
-The metadata index is shared per buffer and settled revision. Concurrent readers share one pending refresh; repeated reads reuse it and point lookups use binary search. It stores positions and types, never syntax-node references or copied source strings. Source is read only for the requested descriptors. Edits invalidate it synchronously, and a changed revision during an asynchronous wait causes a retry.
+The metadata index is shared per buffer and settled revision. Concurrent readers share one pending refresh; repeated reads reuse it and point lookups use binary search. It stores positions and types, never syntax-node references or copied source strings. Source is materialized only when a descriptor's source field is read. Large root traversals yield in bounded chunks, and an edit during a yield discards the unfinished index and retries against the new settled tree. Edits invalidate it synchronously, and a changed revision during an asynchronous wait causes a retry.
 
 ## Teardown and compatibility
 

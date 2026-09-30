@@ -159,4 +159,86 @@ describe("settled typed cell descriptors", () => {
     ]);
     expect(blocks[0].code).toBe("%%time -n 3\nvalue = 1");
   });
+
+  it("preserves the complete shell-magic header when a fragment body is selected", async () => {
+    await lumine.packages.activatePackage("language-python");
+    editor = lumine.workspace.buildTextEditor();
+    registration = lumine.textEditors.add(editor, { role: "fragment" });
+    editor.setText("\n%%! --flag\nfirst\nsecond");
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python");
+    const blocks = await cells.getExecutionBlocks(editor, [
+      [3, 0],
+      [3, 6],
+    ]);
+    expect(blocks).toEqual([{ code: "%%! --flag\nsecond", row: 3, cellType: "code" }]);
+  });
+
+  it("runs a header-only fragment at EOF without inventing a body or a newline", async () => {
+    await lumine.packages.activatePackage("language-python");
+    editor = lumine.workspace.buildTextEditor();
+    registration = lumine.textEditors.add(editor, { role: "fragment" });
+    editor.setText("%%time -n 3");
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python");
+    const end = editor.getBuffer().getEndPosition();
+    expect(await cells.getExecutionBlocks(editor, [[0, 0], end])).toEqual([
+      { code: "%%time -n 3", row: 0, cellType: "code" },
+    ]);
+    expect(await cells.getExecutionBlocks(editor, [end, end])).toEqual([
+      { code: "%%time -n 3", row: 0, cellType: "code" },
+    ]);
+  });
+
+  it("classifies without copying body text and keeps lazy source on its original revision", async () => {
+    await open("# %% [markdown]\n# Original heading\n", "language-ipython", "cell-model.ipy");
+    const reads = spyOn(editor, "getTextInBufferRange").and.callThrough();
+    const descriptor = (
+      await cells.getCellDescriptors(editor, [
+        [1, 0],
+        [1, 0],
+      ])
+    )[0];
+    expect(descriptor.cellType).toBe("markdown");
+    expect(Object.getOwnPropertyDescriptor(descriptor, "source").get).toEqual(
+      jasmine.any(Function),
+    );
+    expect(reads).not.toHaveBeenCalled();
+    editor.setText("# %% [raw]\nNew bytes\n");
+    const fresh = (await cells.getCellDescriptors(editor))[0];
+    expect(fresh.cellType).toBe("raw");
+    expect(descriptor.source).toBe("# Original heading\n");
+    expect(fresh.source).toBe("New bytes\n");
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(fresh.source).toBe("New bytes\n");
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a cooperative traversal when an edit wins during its yield", async () => {
+    await open(
+      Array.from({ length: 600 }, (_, index) => "# %%\nvalue = " + index).join("\n"),
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const ready = jasmine.createSpy("ready");
+    const subscription = cells.onDidUpdate(({ editor: changed }) => {
+      if (changed === editor) ready();
+    });
+    try {
+      const pending = cells.getCellDescriptors(editor);
+      setImmediate(() =>
+        editor.getBuffer().setTextInRange(
+          [
+            [0, 0],
+            [0, 4],
+          ],
+          "# %% [raw]",
+        ),
+      );
+      const descriptors = await pending;
+      expect(descriptors.length).toBe(600);
+      expect(descriptors[0].cellType).toBe("raw");
+      expect(ready).toHaveBeenCalledTimes(1);
+    } finally {
+      subscription.dispose();
+    }
+  });
 });
