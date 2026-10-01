@@ -7,6 +7,29 @@ describe("the code-lens provider", () => {
   let mainModule, provider, editor, disposables, runs, runtimeRequest;
 
   const markers = ["# %%", "a = 1", "# %% markdown", "# text", "# %%", "b = 2"].join("\n");
+  const literalCells = [
+    "# %% Setup",
+    "seed = 1",
+    "# %% [markdown] Notes",
+    "# Heading 😀",
+    "  literal **bold**",
+    "# %% [raw] Bytes",
+    "%%bash remains raw",
+    "<bytes>",
+    "# %% Script",
+    "%%writefile -a notes.txt",
+    "first",
+    "second",
+    "# %% Last",
+    "last = 2",
+  ].join("\n");
+
+  async function useIPython(text) {
+    await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python.ipy");
+    editor.setText(text);
+    await editor.whenGrammarSettled();
+  }
 
   beforeEach(async () => {
     disposables = new CompositeDisposable();
@@ -87,6 +110,114 @@ describe("the code-lens provider", () => {
     expect(runs.length).toBe(1);
     expect(runs[0].blocks.length).toBe(2);
     expect(runs[0].blocks.map((block) => block.cellType)).toEqual(["code", "markdown"]);
+  });
+
+  it("runs literal typed cells and complete magic headers from their own lenses", async () => {
+    await useIPython(literalCells);
+    editor.setCursorBufferPosition([13, 0]);
+    const lenses = await provider.codeLenses(editor);
+    const expected = [
+      [2, { code: "# Heading 😀\n  literal **bold**", row: 4, cellType: "markdown" }],
+      [5, { code: "%%bash remains raw\n<bytes>", row: 7, cellType: "raw" }],
+      [8, { code: "%%writefile -a notes.txt\nfirst\nsecond", row: 11, cellType: "code" }],
+    ];
+    for (const [markerRow, block] of expected) {
+      await lenses
+        .find((lens) => lens.range[0][0] === markerRow && lens.title === "Run Cell")
+        .execute();
+      expect(runs.at(-1)).toEqual({ target: editor, blocks: [block] });
+    }
+    expect(runs.length).toBe(expected.length);
+    expect(runtimeRequest).not.toHaveBeenCalled();
+  });
+
+  it("preserves literal types and magic arguments in the batch above an IPython lens", async () => {
+    await useIPython(literalCells);
+    editor.setCursorBufferPosition([0, 0]);
+    const lenses = await provider.codeLenses(editor);
+    await lenses
+      .find((lens) => lens.range[0][0] === 12 && lens.title === "Run All Above")
+      .execute();
+    expect(runs).toEqual([
+      {
+        target: editor,
+        blocks: [
+          { code: "seed = 1", row: 1, cellType: "code" },
+          { code: "# Heading 😀\n  literal **bold**", row: 4, cellType: "markdown" },
+          { code: "%%bash remains raw\n<bytes>", row: 7, cellType: "raw" },
+          { code: "%%writefile -a notes.txt\nfirst\nsecond", row: 11, cellType: "code" },
+        ],
+      },
+    ]);
+  });
+
+  it("shares one scalar index across concurrent lenses and bulk reads of 1000 typed cells", async () => {
+    lumine.config.set("jupyter-cells.cellMarkers", false);
+    const payloads = Array.from({ length: 1000 }, (_, index) => {
+      switch (index % 4) {
+        case 0:
+          return { type: "code", source: `value_${index} = ${index}` };
+        case 1:
+          return { type: "markdown", source: `# Heading ${index} 😀\n  literal **bold**` };
+        case 2:
+          return { type: "raw", source: `%%bash remains raw ${index}\n<bytes>` };
+        default:
+          return { type: "code", source: `%%capture --no-stderr\nvalue_${index} = ${index}` };
+      }
+    });
+    await useIPython(
+      payloads
+        .map(({ type, source }, index) => `# %% [${type}] Cell ${index}\n${source}`)
+        .join("\n"),
+    );
+    const cells = require("../lib/cells");
+    const service = mainModule.provideJupyterCells();
+    const mode = editor.getBuffer().getLanguageMode();
+    const rootTree = mode.tree;
+    const layers = mode.getAllInjectionLayers();
+    expect(layers.filter((layer) => layer.grammar.scopeName === "source.python").length).toBe(1);
+    const walks = spyOn(rootTree, "walk").and.callThrough();
+    const parse = spyOn(mode, "parseAsync").and.callThrough();
+    const createParser = spyOn(mode, "createParserForLanguage").and.callThrough();
+    const scan = spyOn(editor.getBuffer(), "scan").and.callThrough();
+    const wholeSource = spyOn(editor, "getText").and.callThrough();
+    const ready = jasmine.createSpy("ready");
+    disposables.add(
+      cells.onDidUpdate(({ editor: changed }) => {
+        if (changed === editor) ready();
+      }),
+    );
+    const requests = Array.from({ length: 8 }, () =>
+      Promise.all([
+        provider.codeLenses(editor),
+        service.getCellDescriptors(editor),
+        service.getExecutionBlocks(editor),
+      ]),
+    );
+    const results = await Promise.all(requests);
+    expect(walks).toHaveBeenCalledTimes(1);
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(scan).not.toHaveBeenCalled();
+    expect(wholeSource).not.toHaveBeenCalled();
+    expect(parse).not.toHaveBeenCalled();
+    expect(createParser).not.toHaveBeenCalled();
+    expect(editor.getBuffer().getLanguageMode()).toBe(mode);
+    expect(mode.tree).toBe(rootTree);
+    expect(mode.getAllInjectionLayers()).toEqual(layers);
+    const expected = payloads.map(({ type, source }) => [type, source]);
+    for (const [lenses, descriptors, blocks] of results) {
+      expect(lenses.length).toBe(1999);
+      expect(descriptors.map((cell) => [cell.cellType, cell.source])).toEqual(expected);
+      expect(blocks.map((block) => [block.cellType, block.code])).toEqual(expected);
+    }
+    const index = cells.getMarkerIndex(editor);
+    expect(index.magics.length).toBe(250);
+    expect(index.entries.length).toBe(1000);
+    expect(index.markers.length).toBe(1000);
+    await provider.codeLenses(editor);
+    expect(cells.getMarkerIndex(editor)).toBe(index);
+    expect(walks).toHaveBeenCalledTimes(1);
+    expect(ready).toHaveBeenCalledTimes(1);
   });
 
   it("emits nothing while the setting is off", async () => {

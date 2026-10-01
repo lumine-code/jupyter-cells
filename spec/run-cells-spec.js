@@ -142,6 +142,43 @@ describe("the cell run commands", () => {
     expect(run[2][0].code).toBe("a = 1");
   });
 
+  it("preserves literal types and the full magic header when Run All Above clips its body", async () => {
+    await lumine.packages.activatePackage(path.resolve(__dirname, "..", "..", "language-ipython"));
+    lumine.grammars.assignLanguageMode(editor.getBuffer(), "source.python.ipy");
+    editor.setText(
+      [
+        "# %% Setup",
+        "seed = 1",
+        "# %% [markdown]",
+        "# Literal heading",
+        "  **bold**",
+        "# %% [raw]",
+        "%%time is raw",
+        "# %% Script",
+        "%%writefile -a notes.txt",
+        "first",
+        "second",
+        "# %% Following",
+        "later = 1",
+      ].join("\n"),
+    );
+    await mainModule.provideJupyterCells().getCellDescriptors(editor);
+    const execution = consume(makeExecution());
+    editor.setCursorBufferPosition([9, 2]);
+
+    dispatch("jupyter-cells:run-all-above");
+    await microtasks();
+
+    const runs = execution.calls.filter(([name]) => name === "runBlocks");
+    expect(runs.length).toBe(1);
+    expect(runs[0][2]).toEqual([
+      { code: "seed = 1", row: 1, cellType: "code" },
+      { code: "# Literal heading\n  **bold**", row: 4, cellType: "markdown" },
+      { code: "%%time is raw", row: 6, cellType: "raw" },
+      { code: "%%writefile -a notes.txt\nfirst\n", row: 9, cellType: "code" },
+    ]);
+  });
+
   it("clears, restarts, and reruns for recalculate-all", async () => {
     const execution = consume(makeExecution());
 

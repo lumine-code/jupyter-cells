@@ -198,6 +198,25 @@ describe("notebook marker round-trip", () => {
     );
   });
 
+  it("round-trips magic arguments and literal magic-looking Markdown and raw source", async () => {
+    const original = [
+      originalCell("code", "\n%%writefile -a notes.txt\nfirst\nsecond\n"),
+      originalCell("markdown", "# Heading 😀\n%%capture remains prose\n  **bold**\n"),
+      originalCell("raw", "%%time stays raw\n<bytes>\n"),
+      originalCell("code", "%%capture --no-stderr\nvalue = 1"),
+    ];
+    const { notebookPath } = await writeNotebook("literal-magics", original);
+
+    await _loadNotebook(notebookPath);
+    const editor = lumine.workspace.getActiveTextEditor();
+    const result = parseNotebook(await buildNotebook(editor));
+
+    expect(result.cells.map((cell) => [cell.cell_type, cell.source])).toEqual(
+      original.map((cell) => [cell.cell_type, cell.source]),
+    );
+    expect(editor.getGrammar().scopeName).toBe("source.python.ipy");
+  });
+
   for (const cellType of ["raw", "markdown", "code"]) {
     it(`refuses a reserved delimiter inside an imported ${cellType} payload`, async () => {
       const original = [
