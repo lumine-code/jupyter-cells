@@ -151,6 +151,59 @@ describe("the code-lens provider", () => {
     ]);
   });
 
+  it("runs flagged headers across literal and magic boundaries through the normal lenses", async () => {
+    await useIPython(
+      [
+        "#%%$# Start",
+        "seed = 1",
+        "#%% [markdown] Notes",
+        "# Literal heading",
+        "#%%$$s+;<_# From Markdown",
+        "%%writefile -a notes.txt",
+        "first",
+        "second",
+        "#%% [raw] Data",
+        "raw <payload>",
+        "#%%$$p!_<;# From raw",
+        "%%bash -e",
+        "echo hello",
+        "#%%$$v-# Last",
+        "done = 1",
+      ].join("\n"),
+    );
+    const service = mainModule.provideJupyterCells();
+    const lenses = await provider.codeLenses(editor);
+    expect(
+      lenses.filter((lens) => lens.title === "Run Cell").map((lens) => lens.range[0][0]),
+    ).toEqual([0, 2, 4, 8, 10, 13]);
+    editor.setCursorBufferPosition([14, 0]);
+    await lenses.find((lens) => lens.range[0][0] === 4 && lens.title === "Run Cell").execute();
+    expect(runs.at(-1).blocks).toEqual([
+      { code: "%%writefile -a notes.txt\nfirst\nsecond", row: 7, cellType: "code" },
+    ]);
+    await lenses.find((lens) => lens.range[0][0] === 10 && lens.title === "Run Cell").execute();
+    expect(runs.at(-1).blocks).toEqual([
+      { code: "%%bash -e\necho hello", row: 12, cellType: "code" },
+    ]);
+    expect(
+      await service.getExecutionBlocks(editor, [
+        [7, 0],
+        [7, 6],
+      ]),
+    ).toEqual([{ code: "%%writefile -a notes.txt\nsecond", row: 7, cellType: "code" }]);
+    await lenses
+      .find((lens) => lens.range[0][0] === 13 && lens.title === "Run All Above")
+      .execute();
+    expect(runs.at(-1).blocks).toEqual([
+      { code: "seed = 1", row: 1, cellType: "code" },
+      { code: "# Literal heading", row: 3, cellType: "markdown" },
+      { code: "%%writefile -a notes.txt\nfirst\nsecond", row: 7, cellType: "code" },
+      { code: "raw <payload>", row: 9, cellType: "raw" },
+      { code: "%%bash -e\necho hello", row: 12, cellType: "code" },
+    ]);
+    expect(runtimeRequest).not.toHaveBeenCalled();
+  });
+
   it("shares one scalar index across concurrent lenses and bulk reads of 1000 typed cells", async () => {
     lumine.config.set("jupyter-cells.cellMarkers", false);
     const payloads = Array.from({ length: 1000 }, (_, index) => {

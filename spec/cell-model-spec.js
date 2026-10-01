@@ -58,6 +58,66 @@ describe("settled typed cell descriptors", () => {
     ]);
   });
 
+  it("indexes compact headers and every existing Python navigation flag as cell structure", async () => {
+    const prefixes = [
+      "#%%",
+      "#%%$#",
+      "#%%$$#",
+      "#%%$$s#",
+      "#%%$$p#",
+      "#%%$$v#",
+      "#%%$$1#",
+      "#%%?#",
+      "#%%$$s*#",
+      "#%%$$p+#",
+      "#%%$$v-#",
+      "#%%$$1!#",
+      "#%%$$p_#",
+      "#%%$$p<#",
+      "#%%$$p;#",
+      "#%%$$p!_<;#",
+      "#%%$$S+;<_#",
+    ];
+    const headers = prefixes.map((prefix, index) =>
+      prefix === "#%%?#" ? `${prefix} (2, 'Cell ${index}')` : `${prefix} Cell ${index} 😀`,
+    );
+    const bodies = prefixes.map(
+      (_prefix, index) =>
+        `value_${index} = ${index}\n#$$p# Body annotation\ninline_${index} = 0 #$$v# Inline annotation`,
+    );
+    await open(
+      headers.map((header, index) => `${header}\n${bodies[index]}`).join("\n"),
+      "language-ipython",
+      "navigation-flags.ipy",
+    );
+    const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
+    const descriptors = await cells.getCellDescriptors(editor);
+    const index = cells.getMarkerIndex(editor);
+    expect(descriptors.length).toBe(headers.length);
+    expect(descriptors.map((cell) => cell.cellType)).toEqual(headers.map(() => "code"));
+    expect(descriptors.map((cell) => cell.source)).toEqual(bodies);
+    expect(descriptors.map((cell) => cell.range.start.row)).toEqual(
+      headers.map((_header, item) => item * 4 + 1),
+    );
+    expect(index.markers.map((marker) => marker.start.row)).toEqual(
+      headers.map((_header, item) => item * 4),
+    );
+    expect(
+      index.markers.map((marker) => editor.getTextInBufferRange([marker.start, marker.end])),
+    ).toEqual(headers);
+    const blocks = await cells.getExecutionBlocks(editor);
+    expect(blocks).toEqual(
+      bodies.map((code, item) => ({ code, row: item * 4 + 3, cellType: "code" })),
+    );
+    expect(
+      await cells.getCellDescriptors(editor, [
+        [8, 4],
+        [8, 4],
+      ]),
+    ).toEqual([descriptors[2]]);
+    expect(scans).not.toHaveBeenCalled();
+  });
+
   it("reads code wrappers, an implicit prelude and a wrapped magic from the scaffold", async () => {
     await open(
       [
