@@ -58,6 +58,107 @@ describe("settled typed cell descriptors", () => {
     ]);
   });
 
+  it("reads code wrappers, an implicit prelude and a wrapped magic from the scaffold", async () => {
+    await open(
+      [
+        "before = 1",
+        "# %% Code",
+        "value = 2",
+        "# %% Wrapper",
+        "%%time -n 3",
+        "answer = 42",
+        "# %% [markdown]",
+        "# Heading",
+        "# %% [raw]",
+        "raw data",
+        "",
+      ].join("\n"),
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    await editor.whenGrammarSettled();
+    const root = editor.getBuffer().getLanguageMode().tree.rootNode;
+    expect(root.namedChildren.map((node) => node.type)).toEqual([
+      "code_cell",
+      "code_cell",
+      "code_cell",
+      "markdown_cell",
+      "raw_cell",
+    ]);
+    expect(root.namedChildren[0].childForFieldName("marker")).toBeNull();
+    expect(root.namedChildren[0].childForFieldName("body").type).toBe("python_cell_body");
+    expect(root.namedChildren[2].childForFieldName("body").type).toBe("cell_magic");
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors.map((cell) => cell.cellType)).toEqual([
+      "code",
+      "code",
+      "code",
+      "markdown",
+      "raw",
+    ]);
+    expect(descriptors.map((cell) => cell.source)).toEqual([
+      "before = 1",
+      "value = 2",
+      "%%time -n 3\nanswer = 42",
+      "# Heading",
+      "raw data\n",
+    ]);
+    const blocks = await cells.getExecutionBlocks(editor, [
+      [5, 0],
+      [5, 11],
+    ]);
+    expect(blocks).toEqual([{ code: "%%time -n 3\nanswer = 42", row: 5, cellType: "code" }]);
+  });
+
+  it("shares one root index without traversing combined native Python or opaque bodies", async () => {
+    await lumine.packages.activatePackage("language-python");
+    await open(
+      [
+        "seed = 0",
+        "# %% One",
+        "value = 1",
+        "# %% [markdown]",
+        "%%bash fake",
+        "# Heading",
+        "# %% Two",
+        "%%capture --no-stderr",
+        "value = 2",
+        "",
+      ].join("\n"),
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    await editor.whenGrammarSettled();
+    const mode = editor.getBuffer().getLanguageMode();
+    const nativePython = mode
+      .getAllInjectionLayers()
+      .filter((layer) => layer.grammar.scopeName === "source.python");
+    expect(nativePython.length).toBe(1);
+    for (const layer of nativePython)
+      spyOn(layer.tree, "walk").and.throwError("Cell bounds must not scan native Python AST");
+    const walks = spyOn(mode.tree, "walk").and.callThrough();
+    const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => cells.getCellDescriptors(editor)),
+    );
+    expect(results.every((items) => items.length === 4)).toBe(true);
+    expect(walks).toHaveBeenCalledTimes(1);
+    expect(scans).not.toHaveBeenCalled();
+    const index = cells.getMarkerIndex(editor);
+    expect(index.magics.map((magic) => magic.start.row)).toEqual([7]);
+    expect(results[0][2].source).toBe("%%bash fake\n# Heading");
+    expect(cells.getBreakpoints(editor).map((position) => position.row)).toEqual([1, 3, 6, 9]);
+    expect(
+      (
+        await cells.getExecutionBlocks(editor, [
+          [8, 0],
+          [8, 9],
+        ])
+      )[0].code,
+    ).toBe("%%capture --no-stderr\nvalue = 2");
+    expect(walks).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves typed structure and body ranges around an incomplete Python statement", async () => {
     await open(
       "# %% First\ngood = 1\n# %% [markdown]\n# Heading\n# %% [raw]\nraw <bytes>\n# %% [code]\nvalue =\n",

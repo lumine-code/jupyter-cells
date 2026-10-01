@@ -11,6 +11,8 @@ The cell model of an editor: settled ranges, source, types, and boundaries.
 
 An IPython document uses its existing root syntax tree to find cell markers, literal Markdown and raw cells. A marker inside a string, a bracketed expression, an indented suite or a continued line is not a boundary. Other source languages retain percent markers in their own comment syntax, legacy `<codecell>` tags and exported `In[n]` prompts. Fragment editors inside a notebook remain one code cell: the notebook owns their type and structure.
 
+The IPython root contains `code_cell`, `markdown_cell` and `raw_cell` scaffolds. The index reads their marker fields and direct `cell_magic` body fields; opaque body contents and the injected native Python tree do not define cell boundaries. Source before the first marker remains an implicit code cell.
+
 ## Registration
 
 ```json
