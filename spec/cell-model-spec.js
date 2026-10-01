@@ -416,6 +416,51 @@ describe("settled typed cell descriptors", () => {
     expect(reads).toHaveBeenCalledTimes(1);
   });
 
+  it("retains exact literal line endings when a lazy descriptor outlives its revision", async () => {
+    const source = "# Heading 😀\r\nmiddle\rcarriage\r\nlast\r";
+    await open("# %% [markdown]\r\n" + source, "language-ipython", "cell-model.ipy");
+    const descriptor = (await cells.getCellDescriptors(editor))[0];
+    editor.setText("# %% [raw]\nreplacement\n");
+    const replacement = (await cells.getCellDescriptors(editor))[0];
+    expect(descriptor.cellType).toBe("markdown");
+    expect(descriptor.source).toBe(source);
+    expect(replacement.source).toBe("replacement\n");
+  });
+
+  it("normalizes execution line endings while retaining magic arguments and physical result rows", async () => {
+    const magicSource = "%%writefile -a notes.txt\r\nfirst\rmiddle\r\nsecond\r\n";
+    await open(
+      "# %%\r\n" + magicSource + "\r\n# %% Following\r\nlater = 1",
+      "language-ipython",
+      "cell-model.ipy",
+    );
+    const descriptors = await cells.getCellDescriptors(editor);
+    expect(descriptors[0].source).toBe(magicSource);
+    const blocks = await cells.getExecutionBlocks(editor);
+    expect(blocks).toEqual([
+      { code: "%%writefile -a notes.txt\nfirst\nmiddle\nsecond\n", row: 3, cellType: "code" },
+      { code: "later = 1", row: 6, cellType: "code" },
+    ]);
+    expect(
+      await cells.getExecutionBlocks(editor, [
+        [2, 0],
+        [3, 0],
+      ]),
+    ).toEqual([{ code: "%%writefile -a notes.txt\nfirst\nmiddle\n", row: 2, cellType: "code" }]);
+    expect(
+      await cells.getExecutionBlocks(editor, [
+        [1, 2],
+        [1, 6],
+      ]),
+    ).toEqual([{ code: "%%writefile -a notes.txt\n", row: 1, cellType: "code" }]);
+    expect(
+      await cells.getExecutionBlocks(editor, [
+        [3, 1],
+        [3, 1],
+      ]),
+    ).toEqual([blocks[0]]);
+  });
+
   it("retries a cooperative traversal when an edit wins during its yield", async () => {
     await open(
       Array.from({ length: 600 }, (_, index) => "# %%\nvalue = " + index).join("\n"),

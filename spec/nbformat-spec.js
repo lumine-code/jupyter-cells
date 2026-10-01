@@ -2,6 +2,7 @@ const {
   parseNotebook,
   makeCodeCell,
   makeMarkdownCell,
+  makeRawCell,
   makeNotebook,
   stringifyNotebook,
 } = require("../lib/nbformat");
@@ -55,6 +56,36 @@ describe("the nbformat model", () => {
       });
       expect(nb.cells[0].source).toBe("a\nb");
       expect(nb.cells[1].source).toBe("");
+    });
+
+    it("preserves source line endings only when the literal-source option is selected", () => {
+      const source = "first\r\nsecond\rthird\r";
+      const options = { preserveSourceLineEndings: true };
+      const exact = makeNotebook([
+        makeCodeCell(source, options),
+        makeMarkdownCell(source, options),
+        makeRawCell(source, options),
+      ]);
+      expect(exact.cells.map((cell) => cell.source.join(""))).toEqual([source, source, source]);
+      expect(parseNotebook(exact, options).cells.map((cell) => cell.source)).toEqual([
+        source,
+        source,
+        source,
+      ]);
+      const legacy = source.replace(/\r\n/g, "\n");
+      expect(parseNotebook(exact).cells.map((cell) => cell.source)).toEqual([
+        legacy,
+        legacy,
+        legacy,
+      ]);
+      expect(
+        [makeCodeCell(source), makeMarkdownCell(source), makeRawCell(source)].map((cell) =>
+          cell.source.join(""),
+        ),
+      ).toEqual([legacy, legacy, legacy]);
+      expect(() =>
+        parseNotebook({ ...exact, cells: [{ cell_type: "raw", source: {} }] }, options),
+      ).toThrowError(TypeError);
     });
 
     it("refuses anything that is not a v4 notebook", () => {

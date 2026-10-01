@@ -217,6 +217,47 @@ describe("notebook marker round-trip", () => {
     expect(editor.getGrammar().scopeName).toBe("source.python.ipy");
   });
 
+  for (const [endingName, ending] of [
+    ["LF", "\n"],
+    ["CRLF", "\r\n"],
+    ["lone CR", "\r"],
+  ]) {
+    it(`round-trips exact literal source with internal CRLF and CR and trailing ${endingName}`, async () => {
+      const original = ["code", "markdown", "raw", "raw"].map((cellType, index) => {
+        const source =
+          cellType === "code"
+            ? 'text = """first\r\nmiddle\rcarriage\r\nlast"""' + ending
+            : `# First ${index} 😀\r\nmiddle\rcarriage\r\nlast` + ending;
+        return originalCell(cellType, source);
+      });
+      const { notebookPath } = await writeNotebook(
+        "exact-" + endingName.replace(" ", "-"),
+        original,
+      );
+
+      await _loadNotebook(notebookPath);
+      const editor = lumine.workspace.getActiveTextEditor();
+      const descriptors = await require("../lib/cells").getCellDescriptors(editor);
+      const expected = original.map((cell) => [cell.cell_type, cell.source]);
+      expect(descriptors.map((cell) => [cell.cellType, cell.source])).toEqual(expected);
+      const blocks = await require("../lib/cells").getExecutionBlocks(editor);
+      expect(blocks.map((block) => [block.cellType, block.code])).toEqual(
+        original.map((cell) => [cell.cell_type, cell.source.replace(/\r\n|\r/g, "\n")]),
+      );
+      const exported = await buildNotebook(editor);
+      expect(exported.cells.map((cell) => [cell.cell_type, cell.source.join("")])).toEqual(
+        expected,
+      );
+      expect(
+        parseNotebook(exported, { preserveSourceLineEndings: true }).cells.map((cell) => [
+          cell.cell_type,
+          cell.source,
+        ]),
+      ).toEqual(expected);
+      expect(editor.getGrammar().scopeName).toBe("source.python.ipy");
+    });
+  }
+
   for (const cellType of ["raw", "markdown", "code"]) {
     it(`refuses a reserved delimiter inside an imported ${cellType} payload`, async () => {
       const original = [
