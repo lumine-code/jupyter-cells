@@ -58,6 +58,28 @@ describe("the nbformat model", () => {
       expect(nb.cells[1].source).toBe("");
     });
 
+    it("preserves arrays in application/json instead of joining them as text", () => {
+      const values = [{ name: "one" }, { name: "two" }];
+      const nb = parseNotebook({
+        nbformat: 4,
+        nbformat_minor: 0,
+        cells: [
+          {
+            cell_type: "code",
+            source: "",
+            outputs: [
+              {
+                output_type: "display_data",
+                data: { "application/json": values },
+                metadata: {},
+              },
+            ],
+          },
+        ],
+      });
+      expect(nb.cells[0].outputs[0].data["application/json"]).toEqual(values);
+    });
+
     it("preserves source line endings only when the literal-source option is selected", () => {
       const source = "first\r\nsecond\rthird\r";
       const options = { preserveSourceLineEndings: true };

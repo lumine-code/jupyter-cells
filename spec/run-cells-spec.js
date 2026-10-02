@@ -241,4 +241,100 @@ describe("the cell run commands", () => {
     await pending;
     expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);
   });
+
+  it("keeps a replacement execution and kernel provider after the old edges detach", async () => {
+    const services = require("../lib/services");
+    const execution = makeExecution();
+    const oldExecution = mainModule.consumeJupyterExecution(execution);
+    disposables.add(mainModule.consumeJupyterExecution(execution));
+    oldExecution.dispose();
+    expect(await services.requestExecution()).toBe(execution);
+    const firstKernel = { name: "first" };
+    const secondKernel = { name: "second" };
+    const oldKernel = mainModule.consumeJupyterKernel(firstKernel);
+    disposables.add(mainModule.consumeJupyterKernel(secondKernel));
+    oldKernel.dispose();
+    expect(services.getKernel()).toBe(secondKernel);
+  });
+
+  it("cancels run-all when source changes during service activation", async () => {
+    const execution = consume(makeExecution());
+    let release;
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    const pending = require("../lib/run-cells").runAll(editor);
+    editor.setText("# %%\ndangerous()\n");
+    release(execution);
+    await pending;
+    expect(execution.calls).toEqual([]);
+  });
+
+  it("cancels a run when the grammar changes during service activation", async () => {
+    const execution = consume(makeExecution());
+    let release;
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    const pending = require("../lib/run-cells").runCell(editor);
+    editor.setGrammar(lumine.grammars.nullGrammar);
+    release(execution);
+    await pending;
+    expect(execution.calls).toEqual([]);
+  });
+
+  it("does not route a delayed adapter run to a newly active pane", async () => {
+    const execution = consume(makeExecution({ adapterHandles: true }));
+    let release;
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    const pending = require("../lib/run-cells").runCell(null);
+    await lumine.workspace.open("other-pane.py");
+    release(execution);
+    await pending;
+    expect(execution.calls).toEqual([]);
+  });
+
+  it("keeps the invocation's cursor limit when restarting before run-all-above", async () => {
+    const execution = consume(makeExecution());
+    let restart;
+    execution.restartKernel = (callback) =>
+      new Promise((resolve) => {
+        restart = () => {
+          callback();
+          resolve(true);
+        };
+      });
+    editor.setCursorBufferPosition([3, 0]);
+    const pending = require("../lib/run-cells").recalculateAllAbove(editor);
+    await microtasks();
+    editor.setCursorBufferPosition([5, 0]);
+    restart();
+    await pending;
+    const run = execution.calls.find(([name]) => name === "runBlocks");
+    expect(run[2].map((block) => block.code)).toEqual(["a = 1", "text"]);
+  });
+
+  it("cancels index preparation when the package deactivates", async () => {
+    const cells = require("../lib/cells");
+    const mode = editor.getBuffer().getLanguageMode();
+    let release;
+    spyOn(mode, "atTransactionEnd").and.returnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    editor.setText("# %%\nnew source");
+    const index = cells.refreshIndex(editor);
+    await lumine.packages.deactivatePackage("jupyter-cells");
+    release();
+    expect(await index).toBeNull();
+  });
 });
