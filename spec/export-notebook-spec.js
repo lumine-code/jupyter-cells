@@ -42,7 +42,9 @@ describe("notebook export", () => {
   it("requests jupyter.kernel before reading notebook metadata", async () => {
     const kernelSpec = { name: "python3", display_name: "Python 3", language: "python" };
     const request = spyOn(lumine.packages, "requestService").and.callFake(async () => {
-      services.setKernel({ getActiveKernel: () => ({ kernelSpec }) });
+      services.setKernel({
+        getKernelForEditor: (candidate) => (candidate === editor ? { kernelSpec } : null),
+      });
       return true;
     });
     const filePath = path.join(temporaryDirectory, "export.ipynb");
@@ -156,7 +158,7 @@ describe("notebook marker round-trip", () => {
     const roundTripped = parseNotebook(await buildNotebook(editor));
     expect(roundTripped.cells.map((cell) => cell.cell_type)).toEqual(["code", "markdown"]);
     expect(roundTripped.cells.map((cell) => cell.source)).toEqual(["value = 1", "Heading\nbody"]);
-    expect(runtimeRequest).toHaveBeenCalledWith("jupyter.execution", "^1.0.0");
+    expect(runtimeRequest).toHaveBeenCalledWith("jupyter.output", "^1.0.0");
     expect(editor.getGrammar().scopeName).toBe("source.python.ipy");
     expect(editor.getSaveDialogOptions().defaultPath).toBe(
       path.join(temporaryDirectory, "markers.ipy"),

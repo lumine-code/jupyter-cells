@@ -52,16 +52,10 @@ describe("the code-lens provider", () => {
     runs = [];
     disposables.add(
       mainModule.consumeJupyterExecution({
-        runAdapter: () => false,
-        runBlocks: (target, blocks) => {
+        execute: ({ editor: target, blocks }) => {
           runs.push({ target, blocks });
           return Promise.resolve(true);
         },
-        moveDown() {},
-        clearResults() {},
-        restartKernel() {},
-        importOutputs() {},
-        markdownToOutput: (source) => ({ data: { "text/markdown": source } }),
       }),
     );
   });
@@ -327,7 +321,7 @@ describe("the code-lens provider", () => {
     editor.setText("# %% Harmless\nharmless()\n# %% Code\ndangerous()\n");
     const lenses = await provider.codeLenses(editor);
     const execution = {
-      runBlocks: (target, blocks) => {
+      execute: ({ editor: target, blocks }) => {
         runs.push({ target, blocks });
       },
     };

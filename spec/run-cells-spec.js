@@ -9,31 +9,13 @@ async function microtasks(count = 20) {
 
 // A jupyter.execution fake recording every call, so the specs can assert what
 // the moved commands hand over without a kernel anywhere near them.
-function makeExecution({ adapterHandles = false } = {}) {
+function makeExecution() {
   const calls = [];
   return {
     calls,
-    runAdapter(scope, moveDown) {
-      calls.push(["runAdapter", scope, moveDown]);
-      return adapterHandles;
-    },
-    runBlocks(editor, blocks) {
-      calls.push(["runBlocks", editor, blocks]);
-      return Promise.resolve(true);
-    },
-    moveDown(editor, endRow) {
-      calls.push(["moveDown", editor, endRow]);
-    },
-    clearResults() {
-      calls.push(["clearResults"]);
-    },
-    restartKernel(onRestarted) {
-      calls.push(["restartKernel"]);
-      onRestarted?.();
-    },
-    importOutputs() {},
-    markdownToOutput(source) {
-      return { output_type: "display_data", data: { "text/markdown": source } };
+    execute(request) {
+      calls.push(["execute", request.editor, request.blocks, request]);
+      return Promise.resolve({ accepted: true, done: Promise.resolve({ status: "ok" }) });
     },
   };
 }
@@ -84,7 +66,7 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:run-cell");
     await microtasks();
 
-    const run = execution.calls.find(([name]) => name === "runBlocks");
+    const run = execution.calls.find(([name]) => name === "execute");
     expect(runtimeRequest).not.toHaveBeenCalled();
     expect(run[1]).toBe(editor);
     expect(run[2]).toEqual([{ code: "a = 1", row: 1, cellType: "code" }]);
@@ -97,24 +79,35 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:run-cell-and-move-down");
     await microtasks();
 
-    const order = execution.calls.map(([name]) => name);
-    expect(order.indexOf("moveDown")).toBeGreaterThan(-1);
-    expect(order.indexOf("moveDown")).toBeLessThan(order.indexOf("runBlocks"));
-    const run = execution.calls.find(([name]) => name === "runBlocks");
+    expect(execution.calls.length).toBe(1);
+    expect(execution.calls[0][3].moveDown).toBe(true);
+    const run = execution.calls.find(([name]) => name === "execute");
     // The block was captured from the cell the cursor was in, wherever the
     // move put it afterwards.
     expect(run[2][0].code).toBe("a = 1");
   });
 
-  it("stops at the adapter when a notebook pane claims the run", async () => {
-    const execution = consume(makeExecution({ adapterHandles: true }));
-    editor.setCursorBufferPosition([1, 0]);
-
-    dispatch("jupyter-cells:run-cell");
-    await microtasks();
-
-    expect(execution.calls.map(([name]) => name)).toEqual(["runAdapter"]);
-    expect(execution.calls[0][1]).toBe("active");
+  it("submits the explicit notebook and captured adapter targets only once", async () => {
+    const execution = consume(makeExecution());
+    const item = { isDestroyed: () => false };
+    const owner = { isDestroyed: () => false };
+    const targets = [{ id: "cell", source: "original()" }];
+    const adapter = {
+      getRunTargets: () => targets,
+      getRunTarget: () => targets[0],
+      getKernelOwner: () => owner,
+    };
+    disposables.add(
+      mainModule.consumeJupyterAdapter({
+        getAdapterForItem: (candidate) => (candidate === item ? adapter : null),
+      }),
+    );
+    await require("../lib/run-cells").runCell(null, false, item);
+    expect(execution.calls.length).toBe(1);
+    expect(execution.calls[0][3]).toEqual(
+      jasmine.objectContaining({ item, owner, targets, scope: "active" }),
+    );
+    expect(execution.calls[0][2]).toBeUndefined();
   });
 
   it("walks every cell for run-all, stripping markdown cells to their prose", async () => {
@@ -123,7 +116,7 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:run-all");
     await microtasks();
 
-    const run = execution.calls.find(([name]) => name === "runBlocks");
+    const run = execution.calls.find(([name]) => name === "execute");
     expect(run[2].map((block) => block.cellType)).toEqual(["code", "markdown", "code"]);
     // The comment prefix of the markdown cell is stripped before it is handed over.
     expect(run[2][1].code).toContain("text");
@@ -137,7 +130,7 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:run-all-above");
     await microtasks();
 
-    const run = execution.calls.find(([name]) => name === "runBlocks");
+    const run = execution.calls.find(([name]) => name === "execute");
     expect(run[2].length).toBe(2);
     expect(run[2][0].code).toBe("a = 1");
   });
@@ -169,7 +162,7 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:run-all-above");
     await microtasks();
 
-    const runs = execution.calls.filter(([name]) => name === "runBlocks");
+    const runs = execution.calls.filter(([name]) => name === "execute");
     expect(runs.length).toBe(1);
     expect(runs[0][2]).toEqual([
       { code: "seed = 1", row: 1, cellType: "code" },
@@ -185,9 +178,11 @@ describe("the cell run commands", () => {
     dispatch("jupyter-cells:recalculate-all");
     await microtasks();
 
-    const order = execution.calls.map(([name]) => name);
-    expect(order.indexOf("clearResults")).toBeLessThan(order.indexOf("restartKernel"));
-    expect(order.indexOf("restartKernel")).toBeLessThan(order.indexOf("runBlocks"));
+    expect(execution.calls.length).toBe(1);
+    expect(execution.calls[0][3]).toEqual(
+      jasmine.objectContaining({ editor, restart: true, clear: true }),
+    );
+    expect(execution.calls[0][2].length).toBe(3);
   });
 
   it("says what is missing when no execution service is consumed", async () => {
@@ -214,10 +209,10 @@ describe("the cell run commands", () => {
       await mainModule.provideJupyterCells().getCellDescriptors(editor);
       dispatch("jupyter-cells:run-cell");
       await microtasks();
-      expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);
+      expect(execution.calls.filter(([name]) => name === "execute")).toEqual([]);
       dispatch("jupyter-cells:run-all");
       await microtasks();
-      const runs = execution.calls.filter(([name]) => name === "runBlocks");
+      const runs = execution.calls.filter(([name]) => name === "execute");
       expect(runs.length).toBe(1);
       expect(runs[0][2].map((block) => block.code)).toEqual(["dangerous()\n"]);
     }
@@ -239,7 +234,7 @@ describe("the cell run commands", () => {
     ]);
     resume(execution);
     await pending;
-    expect(execution.calls.filter(([name]) => name === "runBlocks")).toEqual([]);
+    expect(execution.calls.filter(([name]) => name === "execute")).toEqual([]);
   });
 
   it("keeps a replacement execution and kernel provider after the old edges detach", async () => {
@@ -287,38 +282,49 @@ describe("the cell run commands", () => {
     expect(execution.calls).toEqual([]);
   });
 
-  it("does not route a delayed adapter run to a newly active pane", async () => {
-    const execution = consume(makeExecution({ adapterHandles: true }));
+  it("keeps the invoked notebook when focus changes during service activation", async () => {
+    const execution = consume(makeExecution());
+    const item = { isDestroyed: () => false };
+    const targets = [{ id: "cell", source: "original()" }];
+    const adapter = {
+      getRunTargets: () => targets,
+      getRunTarget: () => targets[0],
+      getKernelOwner: () => item,
+    };
+    disposables.add(
+      mainModule.consumeJupyterAdapter({
+        getAdapterForItem: (candidate) => (candidate === item ? adapter : null),
+      }),
+    );
     let release;
     spyOn(require("../lib/services"), "requestExecution").and.returnValue(
       new Promise((resolve) => {
         release = resolve;
       }),
     );
-    const pending = require("../lib/run-cells").runCell(null);
+    const pending = require("../lib/run-cells").runCell(null, false, item);
     await lumine.workspace.open("other-pane.py");
     release(execution);
     await pending;
-    expect(execution.calls).toEqual([]);
+    expect(execution.calls.length).toBe(1);
+    expect(execution.calls[0][3].item).toBe(item);
   });
 
   it("keeps the invocation's cursor limit when restarting before run-all-above", async () => {
     const execution = consume(makeExecution());
-    let restart;
-    execution.restartKernel = (callback) =>
+    let release;
+    spyOn(require("../lib/services"), "requestExecution").and.returnValue(
       new Promise((resolve) => {
-        restart = () => {
-          callback();
-          resolve(true);
-        };
-      });
+        release = resolve;
+      }),
+    );
     editor.setCursorBufferPosition([3, 0]);
     const pending = require("../lib/run-cells").recalculateAllAbove(editor);
     await microtasks();
     editor.setCursorBufferPosition([5, 0]);
-    restart();
+    release(execution);
     await pending;
-    const run = execution.calls.find(([name]) => name === "runBlocks");
+    const run = execution.calls.find(([name]) => name === "execute");
     expect(run[2].map((block) => block.code)).toEqual(["a = 1", "text"]);
   });
 

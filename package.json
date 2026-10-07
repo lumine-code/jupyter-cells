@@ -56,6 +56,11 @@
     }
   },
   "consumedServices": {
+    "jupyter.adapter": {
+      "versions": {
+        "^1.0.0": "consumeJupyterAdapter"
+      }
+    },
     "jupyter.execution": {
       "versions": {
         "^1.0.0": "consumeJupyterExecution"
@@ -64,6 +69,11 @@
     "jupyter.kernel": {
       "versions": {
         "^1.0.0": "consumeJupyterKernel"
+      }
+    },
+    "jupyter.output": {
+      "versions": {
+        "^1.0.0": "consumeJupyterOutput"
       }
     }
   },

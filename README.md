@@ -61,7 +61,10 @@ The boundary line drawn on marker rows can be adjusted in the `styles.css` file,
 - `code-lens.provider`: provided to render Run Cell and Run All Above links above each cell marker.
 - `marker.layer`: provided to draw the cell boundaries on the editor's overview maps (scrollbar, minimap).
 - `jupyter.execution`: consumed to run the computed cells through jupyter-repl's kernels and result bubbles.
+- `jupyter.adapter`: consumed to capture the dispatched notebook's execution targets.
 - `jupyter.kernel`: consumed to stamp the running kernel's spec into an exported notebook.
+- `jupyter.output`: consumed to restore saved output bubbles when importing a notebook.
+- `background-tips.provider`: provided to teach source-cell execution in the empty workspace.
 
 ## Contributing
 

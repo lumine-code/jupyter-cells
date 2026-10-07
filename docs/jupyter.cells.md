@@ -64,7 +64,7 @@ module.exports = {
   },
   async runSelection(editor) {
     const blocks = await this.cells.getExecutionBlocks(editor, editor.getSelectedBufferRange());
-    return this.execution.runBlocks(editor, blocks);
+    return this.execution.execute({ item: editor, editor, blocks });
   },
 };
 ```
