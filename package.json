@@ -18,6 +18,10 @@
   "engines": {
     "lumine": "^1.0.0"
   },
+  "specPackages": [
+    "language-python",
+    "language-ipython"
+  ],
   "main": "./lib/main",
   "files": [
     "docs",
