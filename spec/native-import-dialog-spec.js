@@ -63,8 +63,8 @@ describe("Notebook import file selection", () => {
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   });
 
-  function notebook(name, source) {
-    const filePath = path.join(directory, name + ".ipynb");
+  function notebook(name, source, extension = ".ipynb") {
+    const filePath = path.join(directory, name + extension);
     fs.writeFileSync(
       filePath,
       JSON.stringify({
@@ -97,6 +97,13 @@ describe("Notebook import file selection", () => {
     expect(editors.length).toBe(2);
     expect(editors.map((editor) => editor.getText()).join("\n")).toContain("first = 1\n");
     expect(editors.map((editor) => editor.getText()).join("\n")).toContain("second = 2\n");
+  });
+
+  it("imports a selected notebook with an uppercase file extension", async () => {
+    notebook("uppercase", "answer = 42\n", ".IPYNB");
+    const editors = await dispatchImport();
+    expect(editors.length).toBe(1);
+    if (editors[0]) expect(editors[0].getText()).toContain("answer = 42\n");
   });
 
   it("leaves the workspace unchanged when file selection is cancelled", async () => {

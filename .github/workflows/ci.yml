@@ -60,6 +60,7 @@ jobs:
         shell: bash
     env:
       LUMINE_JASMINE_REPORTER: list
+      LUMINE_DISABLE_SHELLING_OUT_FOR_ENVIRONMENT: "true"
     steps:
       - uses: actions/checkout@v7
         with:
