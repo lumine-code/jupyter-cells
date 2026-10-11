@@ -23,14 +23,17 @@ describe("cell navigation", () => {
   it("moves the cursor between cells", async () => {
     await open("language-python", "cell-navi.py", "a = 1\n# %%\nb = 2\n# %%\nc = 3\n");
     editor.setCursorBufferPosition([0, 0]);
+    const scroll = spyOn(editor, "scrollToScreenRange");
 
     await nextCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(2);
+    expect(scroll.calls.mostRecent().args[1]).toEqual(jasmine.objectContaining({ mode: "zone" }));
     await nextCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(4);
 
     await previousCell(editor);
     expect(editor.getCursorBufferPosition().row).toBe(2);
+    expect(scroll.calls.mostRecent().args[1]).toEqual(jasmine.objectContaining({ mode: "zone" }));
   });
 
   it("selects the cell around the cursor", async () => {
