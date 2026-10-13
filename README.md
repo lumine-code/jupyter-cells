@@ -16,6 +16,8 @@ A `# %%` comment splits a plain source file into runnable cells — the script t
 - **Code lenses**: offers Run Cell and Run All Above links above each marker through the code-lens package.
 - **Typed cells**: `# %% [markdown]` and `# %% [raw]` select literal bodies in `.ipy`; `[md]` abbreviates Markdown and `[code]` explicitly selects code. Bare words are titles, so `# %% markdown notes` remains code. Other source languages keep legacy bare Markdown metadata. IPython boundaries come from its syntax tree, excluding marker text inside strings or Python expressions.
 
+![Python cell boundaries and executed results in the source editor.](.github/demo.png)
+
 ## Installation
 
 To install `jupyter-cells` search for it in the Install pane of the Lumine settings, or run the command `lumine --install lumine-code/jupyter-cells`.

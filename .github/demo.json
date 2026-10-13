@@ -1,0 +1,16 @@
+{
+  "title": "jupyter-cells",
+  "description": "Python cell boundaries and executed results in the source editor.",
+  "recordedOn": "2026-10-13",
+  "sourceRevision": "4d6cac63be1b974cd5a6cf6da24774f283a5b8bb",
+  "mode": "normal",
+  "fontSettings": "default",
+  "images": [
+    {
+      "file": "demo.png",
+      "label": "Python cell boundaries and executed results in the source editor.",
+      "width": 1200,
+      "height": 760
+    }
+  ]
+}
