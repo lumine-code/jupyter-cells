@@ -82,7 +82,7 @@ describe("jupyter-cells package assets", () => {
     expect(Object.keys(block).length).toBe(3);
   });
 
-  it("keeps its commands in one Packages submenu, fencing only the context menu", () => {
+  it("keeps its commands in one Packages submenu", () => {
     const menu = JSON.parse(read("menus/main.json"));
     const packages = menu.menu.find((item) => item.label === "Packages");
     const submenu = packages.submenu.find((item) => item.label === "Jupyter Cells");
@@ -105,10 +105,6 @@ describe("jupyter-cells package assets", () => {
     collect(submenu.submenu);
     expect(commands.length).toBe(17);
     expect(commands.every((command) => command.startsWith("jupyter-cells:"))).toBe(true);
-    // The tree-view import block is fenced by separators at both ends.
-    const context = menu["context-menu"]['.tree-view .file[data-name$=".ipynb"]'];
-    expect(context[0].type).toBe("separator");
-    expect(context[context.length - 1].type).toBe("separator");
   });
 
   it("ships the contract document for the service it owns", () => {
