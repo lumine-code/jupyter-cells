@@ -4,13 +4,14 @@ describe("the notebook import file opener", () => {
   });
 
   const choiceFor = (filePath = "C:/tmp/notebook.ipynb") =>
-    lumine.workspace.getAvailableFileOpeners(filePath).find(({ id }) => id === "jupyter-cells");
+    lumine.workspace.getAvailablePathOpeners(filePath).find(({ id }) => id === "jupyter-cells");
 
   it("stays available while automatic import is off", () => {
     lumine.config.set("jupyter-cells.importNotebookURI", false);
     expect(choiceFor()).toEqual(
       jasmine.objectContaining({ label: "Import Notebook as Source", isDefault: false }),
     );
+    expect(choiceFor().destinations).toEqual(["current"]);
   });
 
   it("yields automatic opening to an eligible notebook viewer", () => {
