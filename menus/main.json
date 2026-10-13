@@ -1,6 +1,15 @@
 {
   "menu": [
     {
+      "label": "Selection",
+      "submenu": [
+        {
+          "label": "Select Jupyter Cell",
+          "command": "jupyter-cells:select-cell"
+        }
+      ]
+    },
+    {
       "label": "Packages",
       "submenu": [
         {
