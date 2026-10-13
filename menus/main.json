@@ -5,7 +5,9 @@
       "submenu": [
         {
           "label": "Select Jupyter Cell",
-          "command": "jupyter-cells:select-cell"
+          "command": "jupyter-cells:select-cell",
+          "group": "document",
+          "order": 30
         }
       ]
     },
