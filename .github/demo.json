@@ -1,16 +1,71 @@
 {
   "title": "jupyter-cells",
   "description": "Python cell boundaries and executed results in the source editor.",
-  "recordedOn": "2026-10-13",
-  "sourceRevision": "4d6cac63be1b974cd5a6cf6da24774f283a5b8bb",
+  "recordedOn": "2026-10-14",
+  "sourceRevision": "2f08b56b04633f28ae26a1fb0786af9e11966edc",
+  "themeSourceRevision": "7fbd047a87ecf1367c896b19ff270cdc28d319f7",
   "mode": "normal",
   "fontSettings": "default",
+  "scenario": "demo.js",
+  "recipeHash": "f7605991e0a4c39d98b839935cd168e8d18a805a775ec29c562f887e4797cb29",
+  "environment": {
+    "platform": "win32",
+    "arch": "x64",
+    "electron": "44.7.0",
+    "chrome": "152.0.7977.130",
+    "devicePixelRatio": 1,
+    "locale": "en-GB",
+    "fontFamily": "Fira Code, Menlo, DejaVu Sans Mono, Consolas, monospace",
+    "fontSize": 14,
+    "themes": ["one-day-syntax", "one-day-ui"]
+  },
+  "viewport": { "width": 1200, "height": 760 },
+  "cornerRadius": 10,
+  "sources": {
+    "editor": {
+      "revision": "8be8f86075ad93df038610d82b3ac6d99329957d",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "package": {
+      "revision": "2f08b56b04633f28ae26a1fb0786af9e11966edc",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "jupyter-cells": {
+      "revision": "2f08b56b04633f28ae26a1fb0786af9e11966edc",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "jupyter-repl": {
+      "revision": "22e65daeb62d6827fdd04cc529d4003cd450ea9f",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "language-python": {
+      "revision": "0ff5b68a22a196804b0ad2451f0c05ff419cf784",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "one-theme": {
+      "revision": "7fbd047a87ecf1367c896b19ff270cdc28d319f7",
+      "dirty": false,
+      "workingTreeHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "fixtures": [
+    {
+      "file": "jupyter/signal.py",
+      "sha256": "66089d1c7a0e51d6fcc6ab8b145c1bd7911bca84380ff2c68fed4b1ec4d73f4c"
+    }
+  ],
   "images": [
     {
       "file": "demo.png",
       "label": "Python cell boundaries and executed results in the source editor.",
       "width": 1200,
-      "height": 760
+      "height": 760,
+      "sha256": "74ef93802722d2d54abd8e96d7a10f7048873f22fcec293a9017590bc7219865"
     }
   ]
 }
