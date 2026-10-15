@@ -66,7 +66,7 @@ describe("jupyter-cells package assets", () => {
     }
   });
 
-  it("binds exactly the three run keystrokes that moved here", () => {
+  it("keeps source-file execution in the Jupyter chord family", () => {
     const raw = read("keymaps/main.json").replace(/^\s*\/\/.*$/gm, "");
     const keymap = JSON.parse(raw);
     const selectors = Object.keys(keymap);
@@ -74,11 +74,10 @@ describe("jupyter-cells package assets", () => {
       "lumine-workspace lumine-text-editor:not([mini]):not(lumine-dock lumine-text-editor)",
     ]);
     const block = keymap[selectors[0]];
-    expect(block["alt-shift-enter"]).toBe("jupyter-cells:run-cell");
-    expect(block["cmdorctrl-alt-shift-enter"]).toBe("jupyter-cells:run-cell-and-move-down");
-    expect(block["cmdorctrl-shift-enter"]).toBe("jupyter-cells:run-all");
-    // alt-enter belongs to intentions; this more specific block must not take it.
-    expect(block["alt-enter"]).toBeUndefined();
+    expect(block["alt-j c r"]).toBe("jupyter-cells:run-cell");
+    expect(block["alt-j c s"]).toBe("jupyter-cells:run-cell-and-move-down");
+    expect(block["alt-j c a"]).toBe("jupyter-cells:run-all");
+    expect(Object.keys(block).some((keystrokes) => keystrokes.includes("enter"))).toBe(false);
     expect(Object.keys(block).length).toBe(3);
   });
 
