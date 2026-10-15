@@ -1,6 +1,8 @@
 # Notebook conversion
 
-`jupyter-cells:import-notebook` opens a notebook as a source document. For a Python notebook, it creates literal `.ipy` code, Markdown, and raw cells and suggests an `.ipy` filename when you save. Saved results can appear inline when `jupyter-repl` is available. Other notebook languages retain their language's comment-prefixed non-code cells.
+`jupyter-cells:import-notebook` selects notebook files in a native dialog owned by the invoking presentation, then imports them into its captured center pane. For a Python notebook, it creates literal `.ipy` code, Markdown, and raw cells and suggests an `.ipy` filename when you save. Saved results can appear inline when `jupyter-repl` is available. Other notebook languages retain their language's comment-prefixed non-code cells.
+
+Launcher **Open… > Import Notebook as Source** imports into the captured center pane, even when another pane becomes active while the notebook is being read. Cancelling the open, closing its pane, or deactivating the package stops pending reads and prevents later source editors or saved outputs from appearing. An import that has already displayed source preserves that document when cancellation stops its pending output restoration.
 
 `jupyter-cells:export-notebook` writes the source document as an `.ipynb` notebook with code, Markdown, and raw cell types. Export does not require a running kernel; when one is available, its specification supplies the notebook's kernel metadata.
 
