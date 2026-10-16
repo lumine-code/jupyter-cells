@@ -26,23 +26,32 @@ To install `jupyter-cells` search for it in the Install pane of the Lumine setti
 
 Commands available in `lumine-workspace`:
 
+- `jupyter-cells:import-notebook`: open an ipynb notebook as a source file.
+
+Commands available in `lumine-text-editor:not([mini]):not(.jupyter-notebook-container lumine-text-editor), .jupyter-notebook-container`:
+
 - `jupyter-cells:run-cell`: run the cell holding the cursor,
 - `jupyter-cells:run-cell-and-move-down`: run the cell holding the cursor and move on to the next,
 - `jupyter-cells:run-all`: run every cell in the file, from the top,
 - `jupyter-cells:run-all-above`: run every cell above the cursor,
 - `jupyter-cells:recalculate-all`: restart the kernel, clear the results, and run everything,
-- `jupyter-cells:recalculate-all-above`: restart the kernel and run everything above the cursor,
+- `jupyter-cells:recalculate-all-above`: restart the kernel and run everything above the cursor.
+
+Commands available in `lumine-text-editor:not([mini])`:
+
 - `jupyter-cells:go-to-next-cell`: move the cursor to the start of the next cell,
 - `jupyter-cells:go-to-previous-cell`: move the cursor to the start of the previous cell,
 - `jupyter-cells:select-cell`: select the whole of the cell holding the cursor,
 - `jupyter-cells:select-previous-cell`: extend the selection to take in the previous cell,
 - `jupyter-cells:select-next-cell`: extend the selection to take in the next cell,
-- `jupyter-cells:move-cell-up`: swap this cell with the one above it,
-- `jupyter-cells:move-cell-down`: swap this cell with the one below it,
 - `jupyter-cells:fold-current-cell`: fold the cell holding the cursor,
 - `jupyter-cells:fold-all-but-current-cell`: fold every cell except the one holding the cursor,
-- `jupyter-cells:import-notebook`: open an ipynb notebook as a source file,
 - `jupyter-cells:export-notebook`: write this file out as an ipynb notebook.
+
+Commands available in `lumine-text-editor:not([mini]):not([readonly])`:
+
+- `jupyter-cells:move-cell-up`: swap this cell with the one above it,
+- `jupyter-cells:move-cell-down`: swap this cell with the one below it.
 
 ## Documentation
 
