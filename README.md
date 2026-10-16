@@ -28,7 +28,7 @@ Commands available in `lumine-workspace`:
 
 - `jupyter-cells:import-notebook`: open an ipynb notebook as a source file.
 
-Commands available in `lumine-text-editor:not([mini]):not(.jupyter-notebook-container lumine-text-editor), .jupyter-notebook-container`:
+Commands available in `lumine-text-editor:not([mini]):not(.jupyter-notebook-container lumine-text-editor)` and `.jupyter-notebook-container`:
 
 - `jupyter-cells:run-cell`: run the cell holding the cursor,
 - `jupyter-cells:run-cell-and-move-down`: run the cell holding the cursor and move on to the next,
