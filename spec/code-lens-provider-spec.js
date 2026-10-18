@@ -224,7 +224,7 @@ describe("the code-lens provider", () => {
     const layers = mode.getAllInjectionLayers();
     expect(layers.filter((layer) => layer.grammar.scopeName === "source.python").length).toBe(1);
     const walks = spyOn(rootTree, "walk").and.callThrough();
-    const parse = spyOn(mode, "parseAsync").and.callThrough();
+    const parse = spyOn(mode, "parse").and.callThrough();
     const createParser = spyOn(mode, "createParserForLanguage").and.callThrough();
     const scan = spyOn(editor.getBuffer(), "scan").and.callThrough();
     const wholeSource = spyOn(editor, "getText").and.callThrough();
