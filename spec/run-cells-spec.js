@@ -332,7 +332,7 @@ describe("the cell run commands", () => {
     const cells = require("../lib/cells");
     const mode = editor.getBuffer().getLanguageMode();
     let release;
-    spyOn(mode, "atTransactionEnd").and.returnValue(
+    spyOn(mode, "atGrammarSettlement").and.returnValue(
       new Promise((resolve) => {
         release = resolve;
       }),
