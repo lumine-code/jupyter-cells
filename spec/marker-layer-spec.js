@@ -1,7 +1,7 @@
 const { CompositeDisposable, Emitter, Point } = require("lumine");
 
 describe("jupyter-cells marker layer", () => {
-  let workspaceElement, editor, mainModule, markerLayer;
+  let workspaceElement, editor, mainModule, markerLayer, attached;
 
   beforeEach(async () => {
     workspaceElement = lumine.views.getView(lumine.workspace);
@@ -14,6 +14,11 @@ describe("jupyter-cells marker layer", () => {
     // Activation connected the layer to the package's own jupyter.cells
     // service; the specs below connect fakes, so that wiring has to go first.
     mainModule.markerLayerConnection.dispose();
+    attached = [];
+  });
+
+  afterEach(() => {
+    for (const layer of attached) layer.disposables.dispose();
   });
 
   function createCellsService(breakpointsByEditor) {
@@ -37,10 +42,16 @@ describe("jupyter-cells marker layer", () => {
       update: jasmine.createSpy("update"),
     };
     provider.initialize(layer);
+    attached.push(layer);
     return layer;
   }
 
   describe("activation", () => {
+    it("can deactivate before the marker runtime has activated", () => {
+      const uninitialized = { deactivate: markerLayer.deactivate };
+      expect(() => uninitialized.deactivate()).not.toThrow();
+    });
+
     it("wires the layer to the package's own cells service", () => {
       expect(lumine.packages.isPackageActive("jupyter-cells")).toBe(true);
       expect(mainModule.markerLayerConnection).toBeDefined();
@@ -99,11 +110,14 @@ describe("jupyter-cells marker layer", () => {
       const disposable = markerLayer.connect(service);
       expect(markerLayer.cellsService).toBe(service);
       layer.update.calls.reset();
+      const bufferMarkers = layer.cache.get("bufferMarkers");
+      expect(bufferMarkers.getMarkers().length).toBe(1);
 
       disposable.dispose();
       expect(markerLayer.cellsService).toBe(null);
       expect(markerLayer.breakpoints(editor)).toEqual([]);
       expect(layer.cache.get("data")).toEqual([]);
+      expect(bufferMarkers.getMarkers()).toEqual([]);
       expect(layer.update).toHaveBeenCalledTimes(1);
 
       layer.disposables.dispose();
@@ -180,9 +194,65 @@ describe("jupyter-cells marker layer", () => {
 
     it("maps breakpoints to marker rows", () => {
       const layer = createLayer(provider);
-      layer.cache.set("data", [new Point(2, 0), new Point(12, 0)]);
+      markerLayer.setBreakpoints(editor, [new Point(2, 0), new Point(12, 0)]);
 
       expect(provider.getItems(layer)).toEqual([{ row: 2 }, { row: 12 }]);
+    });
+
+    it("tracks repeated newline edits before the next parser result without polling the producer", () => {
+      const points = [new Point(4, 0)];
+      const layer = createLayer(provider);
+      const service = createCellsService(new Map([[editor, points]]));
+      spyOn(service, "initBreakpoints").and.callThrough();
+      const disposable = markerLayer.connect(service);
+      const stopped = jasmine.createSpy("stopped");
+      const stopSubscription = editor.onDidStopChanging(stopped);
+
+      editor.getBuffer().insert([0, 0], "\n");
+      expect(provider.getItems(layer)).toEqual([{ row: 5 }]);
+      editor.getBuffer().insert([0, 0], "\n");
+      expect(provider.getItems(layer)).toEqual([{ row: 6 }]);
+      expect(service.initBreakpoints).toHaveBeenCalledTimes(1);
+      expect(stopped).not.toHaveBeenCalled();
+      expect(points[0].row).toBe(4);
+
+      service.emitter.emit("did-update", { editor, breakpoints: points });
+      expect(provider.getItems(layer)).toEqual([{ row: 6 }]);
+
+      const oldAnchor = layer.cache.get("anchors")[0].marker;
+      service.emitter.emit("did-update", { editor, breakpoints: [new Point(8, 0)] });
+      expect(oldAnchor.isDestroyed()).toBe(true);
+      expect(provider.getItems(layer)).toEqual([{ row: 8 }]);
+
+      stopSubscription.dispose();
+      disposable.dispose();
+    });
+
+    it("projects moved cell boundaries through folds and changing soft wraps", () => {
+      editor.setText(
+        ["x".repeat(100), "before", "fold", "hidden", "end", "# %%", "tail"].join("\n"),
+      );
+      editor.displayLayer.reset({ softWrapColumn: 10 });
+      editor.foldBufferRowRange(2, 4);
+      const layer = createLayer(provider);
+      const service = createCellsService(new Map([[editor, [new Point(5, 0)]]]));
+      const disposable = markerLayer.connect(service);
+      const before = provider.getItems(layer)[0].row;
+      expect(before).toBeGreaterThan(5);
+
+      editor.getBuffer().insert([1, 0], "\n\n");
+
+      const moved = provider.getItems(layer)[0].row;
+      expect(moved).toBe(before + 2);
+      expect(moved).toBe(editor.screenPositionForBufferPosition([7, 0]).row);
+
+      editor.displayLayer.reset({ softWrapColumn: 20 });
+      expect(provider.getItems(layer)[0].row).toBe(
+        editor.screenPositionForBufferPosition([7, 0]).row,
+      );
+      expect(provider.getItems(layer)[0].row).toBeLessThan(moved);
+
+      disposable.dispose();
     });
 
     it("returns no items without cached data", () => {
@@ -194,6 +264,7 @@ describe("jupyter-cells marker layer", () => {
       const layer = createLayer(provider);
       const service = createCellsService(new Map());
       const disposable = markerLayer.connect(service);
+      const bufferMarkers = layer.cache.get("bufferMarkers");
       layer.disposables.dispose();
       layer.update.calls.reset();
 
@@ -202,6 +273,8 @@ describe("jupyter-cells marker layer", () => {
 
       expect(layer.cache.get("data")).toEqual([]);
       expect(layer.update).not.toHaveBeenCalled();
+      expect(bufferMarkers.isDestroyed()).toBe(true);
+      expect(editor.getBuffer().getMarkerLayer(bufferMarkers.id)).toBeUndefined();
 
       disposable.dispose();
     });
