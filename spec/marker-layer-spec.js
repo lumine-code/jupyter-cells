@@ -94,13 +94,60 @@ describe("jupyter-cells marker layer", () => {
     });
 
     it("detaches the service on disposal", () => {
+      const layer = createLayer(mainModule.provideMarkerLayer());
       const service = createCellsService(new Map([[editor, [new Point(1, 0)]]]));
       const disposable = markerLayer.connect(service);
       expect(markerLayer.cellsService).toBe(service);
+      layer.update.calls.reset();
 
       disposable.dispose();
       expect(markerLayer.cellsService).toBe(null);
       expect(markerLayer.breakpoints(editor)).toEqual([]);
+      expect(layer.cache.get("data")).toEqual([]);
+      expect(layer.update).toHaveBeenCalledTimes(1);
+
+      layer.disposables.dispose();
+    });
+
+    it("ignores updates and disposal from a replaced service connection", () => {
+      const layer = createLayer(mainModule.provideMarkerLayer());
+      const firstService = createCellsService(new Map([[editor, [new Point(2, 0)]]]));
+      const nextPoints = [new Point(6, 0)];
+      const nextService = createCellsService(new Map([[editor, nextPoints]]));
+      const firstConnection = markerLayer.connect(firstService);
+      const nextConnection = markerLayer.connect(nextService);
+      layer.update.calls.reset();
+
+      firstService.emitter.emit("did-update", { editor, breakpoints: [new Point(3, 0)] });
+      firstConnection.dispose();
+
+      expect(markerLayer.cellsService).toBe(nextService);
+      expect(layer.cache.get("data")).toEqual(nextPoints);
+      expect(layer.update).not.toHaveBeenCalled();
+
+      nextConnection.dispose();
+      expect(layer.cache.get("data")).toEqual([]);
+      expect(layer.update).toHaveBeenCalledTimes(1);
+
+      layer.disposables.dispose();
+    });
+
+    it("keeps a newer connection when the same service object reconnects", () => {
+      const points = [new Point(3, 0)];
+      const layer = createLayer(mainModule.provideMarkerLayer());
+      const service = createCellsService(new Map([[editor, points]]));
+      const firstConnection = markerLayer.connect(service);
+      const nextConnection = markerLayer.connect(service);
+      layer.update.calls.reset();
+
+      firstConnection.dispose();
+
+      expect(markerLayer.cellsService).toBe(service);
+      expect(layer.cache.get("data")).toEqual(points);
+      expect(layer.update).not.toHaveBeenCalled();
+
+      nextConnection.dispose();
+      layer.disposables.dispose();
     });
   });
 
