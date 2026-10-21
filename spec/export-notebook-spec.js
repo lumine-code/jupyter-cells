@@ -90,9 +90,10 @@ describe("notebook marker round-trip", () => {
     spyOn(lumine.grammars, "assignLanguageMode").and.callFake((buffer, ...args) => {
       const result = assign(buffer, ...args);
       const mode = buffer.getLanguageMode();
-      if (jasmine.isSpy(mode.atTransactionEnd)) return result;
-      const settle = mode.atTransactionEnd.bind(mode);
-      spyOn(mode, "atTransactionEnd").and.callFake(async () => {
+      const method = mode.atGrammarSettlement ? "atGrammarSettlement" : "atTransactionEnd";
+      if (jasmine.isSpy(mode[method])) return result;
+      const settle = mode[method].bind(mode);
+      spyOn(mode, method).and.callFake(async () => {
         const transaction = await settle();
         reach(lumine.workspace.getTextEditors().find((editor) => editor.getBuffer() === buffer));
         await gate;

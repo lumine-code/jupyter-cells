@@ -1,4 +1,4 @@
-const { foldAllButCurrentCell, foldCurrentCell, getCells } = require("../lib/cells");
+const { foldAllButCurrentCell, foldCurrentCell, getCells, refreshIndex } = require("../lib/cells");
 
 // Two bugs met here, in the package this code moved from. `foldAllButCurrentCell`
 // dropped the first cell to skip a leading empty range that `getCells` already
@@ -19,6 +19,7 @@ describe("cell folding", () => {
     if (languageMode.atTransactionEnd) {
       await languageMode.atTransactionEnd();
     }
+    await refreshIndex(editor);
     return editor;
   };
 

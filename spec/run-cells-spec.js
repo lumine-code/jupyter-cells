@@ -56,14 +56,14 @@ describe("the cell run commands", () => {
   };
 
   const dispatch = (command) => {
-    lumine.commands.dispatch(lumine.views.getView(editor), command);
+    return lumine.commands.dispatch(lumine.views.getView(editor), command);
   };
 
   it("hands the cursor's cell to the execution service as one block", async () => {
     const execution = consume(makeExecution());
     editor.setCursorBufferPosition([1, 0]);
 
-    dispatch("jupyter-cells:run-cell");
+    await dispatch("jupyter-cells:run-cell");
     await microtasks();
 
     const run = execution.calls.find(([name]) => name === "execute");
@@ -76,7 +76,7 @@ describe("the cell run commands", () => {
     const execution = consume(makeExecution());
     editor.setCursorBufferPosition([1, 0]);
 
-    dispatch("jupyter-cells:run-cell-and-move-down");
+    await dispatch("jupyter-cells:run-cell-and-move-down");
     await microtasks();
 
     expect(execution.calls.length).toBe(1);
@@ -113,7 +113,7 @@ describe("the cell run commands", () => {
   it("walks every cell for run-all, stripping markdown cells to their prose", async () => {
     const execution = consume(makeExecution());
 
-    dispatch("jupyter-cells:run-all");
+    await dispatch("jupyter-cells:run-all");
     await microtasks();
 
     const run = execution.calls.find(([name]) => name === "execute");
@@ -127,7 +127,7 @@ describe("the cell run commands", () => {
     const execution = consume(makeExecution());
     editor.setCursorBufferPosition([3, 0]);
 
-    dispatch("jupyter-cells:run-all-above");
+    await dispatch("jupyter-cells:run-all-above");
     await microtasks();
 
     const run = execution.calls.find(([name]) => name === "execute");
@@ -159,7 +159,7 @@ describe("the cell run commands", () => {
     const execution = consume(makeExecution());
     editor.setCursorBufferPosition([9, 2]);
 
-    dispatch("jupyter-cells:run-all-above");
+    await dispatch("jupyter-cells:run-all-above");
     await microtasks();
 
     const runs = execution.calls.filter(([name]) => name === "execute");
@@ -175,7 +175,7 @@ describe("the cell run commands", () => {
   it("clears, restarts, and reruns for recalculate-all", async () => {
     const execution = consume(makeExecution());
 
-    dispatch("jupyter-cells:recalculate-all");
+    await dispatch("jupyter-cells:recalculate-all");
     await microtasks();
 
     expect(execution.calls.length).toBe(1);
@@ -188,7 +188,7 @@ describe("the cell run commands", () => {
   it("says what is missing when no execution service is consumed", async () => {
     editor.setCursorBufferPosition([1, 0]);
 
-    dispatch("jupyter-cells:run-cell");
+    await dispatch("jupyter-cells:run-cell");
     await microtasks();
 
     const notifications = lumine.notifications.getNotifications();
@@ -207,10 +207,10 @@ describe("the cell run commands", () => {
       editor.setCursorBufferPosition([0, 0]);
       execution.calls.length = 0;
       await mainModule.provideJupyterCells().getCellDescriptors(editor);
-      dispatch("jupyter-cells:run-cell");
+      await dispatch("jupyter-cells:run-cell");
       await microtasks();
       expect(execution.calls.filter(([name]) => name === "execute")).toEqual([]);
-      dispatch("jupyter-cells:run-all");
+      await dispatch("jupyter-cells:run-all");
       await microtasks();
       const runs = execution.calls.filter(([name]) => name === "execute");
       expect(runs.length).toBe(1);

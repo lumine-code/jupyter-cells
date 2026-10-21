@@ -137,17 +137,20 @@ describe("settled typed cell descriptors", () => {
       "cell-model.ipy",
     );
     await editor.whenGrammarSettled();
-    const root = editor.getBuffer().getLanguageMode().tree.rootNode;
-    expect(root.namedChildren.map((node) => node.type)).toEqual([
+    const root = await editor.analyzeSyntax(
+      require.resolve("./helpers/syntax-inspection"),
+      "structure",
+    );
+    expect(root.children.map((node) => node.type)).toEqual([
       "code_cell",
       "code_cell",
       "code_cell",
       "markdown_cell",
       "raw_cell",
     ]);
-    expect(root.namedChildren[0].childForFieldName("marker")).toBeNull();
-    expect(root.namedChildren[0].childForFieldName("body").type).toBe("python_cell_body");
-    expect(root.namedChildren[2].childForFieldName("body").type).toBe("cell_magic");
+    expect(root.children[0].marker).toBe(false);
+    expect(root.children[0].bodyType).toBe("python_cell_body");
+    expect(root.children[2].bodyType).toBe("cell_magic");
     const descriptors = await cells.getCellDescriptors(editor);
     expect(descriptors.map((cell) => cell.cellType)).toEqual([
       "code",
@@ -189,20 +192,25 @@ describe("settled typed cell descriptors", () => {
       "cell-model.ipy",
     );
     await editor.whenGrammarSettled();
-    const mode = editor.getBuffer().getLanguageMode();
-    const nativePython = mode
-      .getAllInjectionLayers()
-      .filter((layer) => layer.grammar.scopeName === "source.python");
-    expect(nativePython.length).toBe(1);
-    for (const layer of nativePython)
-      spyOn(layer.tree, "walk").and.throwError("Cell bounds must not scan native Python AST");
-    const walks = spyOn(mode.tree, "walk").and.callThrough();
+    const structure = await editor.analyzeSyntax(
+      require.resolve("./helpers/syntax-inspection"),
+      "structure",
+    );
+    expect(structure.layers.filter((scope) => scope === "source.python").length).toBe(1);
+    const builds = spyOn(editor.getBuffer(), "analyzeSyntax").and.callThrough();
     const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
     const results = await Promise.all(
       Array.from({ length: 20 }, () => cells.getCellDescriptors(editor)),
     );
     expect(results.every((items) => items.length === 4)).toBe(true);
-    expect(walks).toHaveBeenCalledTimes(1);
+    const proof = await editor.analyzeSyntax(
+      require.resolve("./helpers/syntax-inspection"),
+      "indexTraversal",
+    );
+    expect(proof.walks).toBe(1);
+    expect(proof.descents).toBe(1);
+    expect(proof.siblings).toBe(proof.children);
+    expect(builds).toHaveBeenCalledTimes(1);
     expect(scans).not.toHaveBeenCalled();
     const index = cells.getMarkerIndex(editor);
     expect(index.magics.map((magic) => magic.start.row)).toEqual([7]);
@@ -216,7 +224,7 @@ describe("settled typed cell descriptors", () => {
         ])
       )[0].code,
     ).toBe("%%capture --no-stderr\nvalue = 2");
-    expect(walks).toHaveBeenCalledTimes(1);
+    expect(builds).toHaveBeenCalledTimes(1);
   });
 
   it("preserves typed structure and body ranges around an incomplete Python statement", async () => {
@@ -251,12 +259,15 @@ describe("settled typed cell descriptors", () => {
 
   it("shares one scan for concurrent readers and invalidates synchronously on edits", async () => {
     await open("# %%\na = 1\n# %% [markdown]\n# text");
-    const scans = spyOn(editor.getBuffer(), "scan").and.callThrough();
+    const builds = spyOn(
+      editor.getBuffer(),
+      editor.getBuffer().getLanguageMode().asynchronousSyntax ? "analyzeSyntax" : "scan",
+    ).and.callThrough();
     await Promise.all(
       Array.from({ length: 20 }, () => cells.getCellDescriptors(editor, new Range([1, 0], [1, 0]))),
     );
     cells.getBreakpoints(editor);
-    expect(scans.calls.count()).toBe(1);
+    expect(builds.calls.count()).toBe(1);
     editor.getBuffer().setTextInRange(
       [
         [0, 0],
@@ -266,7 +277,28 @@ describe("settled typed cell descriptors", () => {
     );
     const descriptor = (await cells.getCellDescriptors(editor, new Range([1, 0], [1, 0])))[0];
     expect(descriptor.cellType).toBe("raw");
-    expect(scans.calls.count()).toBe(2);
+    expect(builds.calls.count()).toBe(2);
+  });
+
+  it("finishes a shared index for a surviving split when its first reader closes", async () => {
+    await open("# %% First\na = 1\n# %% Second\nb = 2");
+    const other = editor.copy();
+    let release;
+    spyOn(editor, "whenGrammarSettled").and.returnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    try {
+      const first = cells.getCellDescriptors(editor);
+      const second = cells.getCellDescriptors(other);
+      editor.destroy();
+      release(false);
+      expect(await first).toEqual([]);
+      expect((await second).map((cell) => cell.source)).toEqual(["a = 1", "b = 2"]);
+    } finally {
+      other.destroy();
+    }
   });
 
   it("splits and clips a cross-cell selection before preparing execution", async () => {

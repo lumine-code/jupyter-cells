@@ -220,12 +220,8 @@ describe("the code-lens provider", () => {
     const cells = require("../lib/cells");
     const service = mainModule.provideJupyterCells();
     const mode = editor.getBuffer().getLanguageMode();
-    const rootTree = mode.tree;
-    const layers = mode.getAllInjectionLayers();
-    expect(layers.filter((layer) => layer.grammar.scopeName === "source.python").length).toBe(1);
-    const walks = spyOn(rootTree, "walk").and.callThrough();
-    const parse = spyOn(mode, "parse").and.callThrough();
-    const createParser = spyOn(mode, "createParserForLanguage").and.callThrough();
+    const snapshot = editor.getBuffer().getSyntaxSnapshotToken();
+    const builds = spyOn(editor.getBuffer(), "analyzeSyntax").and.callThrough();
     const scan = spyOn(editor.getBuffer(), "scan").and.callThrough();
     const wholeSource = spyOn(editor, "getText").and.callThrough();
     const ready = jasmine.createSpy("ready");
@@ -242,15 +238,19 @@ describe("the code-lens provider", () => {
       ]),
     );
     const results = await Promise.all(requests);
-    expect(walks).toHaveBeenCalledTimes(1);
+    expect(builds).toHaveBeenCalledTimes(1);
     expect(ready).toHaveBeenCalledTimes(1);
     expect(scan).not.toHaveBeenCalled();
     expect(wholeSource).not.toHaveBeenCalled();
-    expect(parse).not.toHaveBeenCalled();
-    expect(createParser).not.toHaveBeenCalled();
     expect(editor.getBuffer().getLanguageMode()).toBe(mode);
-    expect(mode.tree).toBe(rootTree);
-    expect(mode.getAllInjectionLayers()).toEqual(layers);
+    expect(editor.getBuffer().getSyntaxSnapshotToken()).toBe(snapshot);
+    const proof = await editor.analyzeSyntax(
+      require.resolve("./helpers/syntax-inspection"),
+      "indexTraversal",
+    );
+    expect(proof.walks).toBe(1);
+    expect(proof.descents).toBe(1);
+    expect(proof.siblings).toBe(proof.children);
     const expected = payloads.map(({ type, source }) => [type, source]);
     for (const [lenses, descriptors, blocks] of results) {
       expect(lenses.length).toBe(1999);
@@ -263,7 +263,7 @@ describe("the code-lens provider", () => {
     expect(index.markers.length).toBe(1000);
     await provider.codeLenses(editor);
     expect(cells.getMarkerIndex(editor)).toBe(index);
-    expect(walks).toHaveBeenCalledTimes(1);
+    expect(builds).toHaveBeenCalledTimes(1);
     expect(ready).toHaveBeenCalledTimes(1);
   });
 
