@@ -11,7 +11,7 @@ A `# %%` comment splits a plain source file into runnable cells — the script t
 - **Navigation**: moves the cursor between cells, and selects or extends the selection cell by cell.
 - **Reordering**: swaps a cell with its neighbour above or below, inventing the boundary marker where the file's top needs one.
 - **Folding**: folds the current cell, or everything except it.
-- **Boundary lines**: draws a line on every marker row, live with the setting and customisable from your stylesheet, and shows the same boundaries on the scrollbar and minimap via the marker hub.
+- **Boundary lines**: draws a line on every marker row, live with the setting and customisable from your stylesheet, and shows the same boundaries on the scrollbar and minimap via the marker hub. Choosing None as the grammar clears the boundaries and pauses cell indexing until a grammar is restored.
 - **Notebook import and export**: imports a Python `.ipynb` as literal `.ipy` source with code, Markdown and raw cells, suggests its `.ipy` filename when saving, and exports all three types with their source newlines preserved. Other languages retain commented non-code cells. Saved results render inline when jupyter-repl is present.
 - **Code lenses**: offers Run Cell and Run All Above links above each marker through the code-lens package.
 - **Typed cells**: `# %% [markdown]` and `# %% [raw]` select literal bodies in `.ipy`; `[md]` abbreviates Markdown and `[code]` explicitly selects code. Bare words are titles, so `# %% markdown notes` remains code. Other source languages keep legacy bare Markdown metadata. IPython boundaries come from its syntax tree, excluding marker text inside strings or Python expressions.

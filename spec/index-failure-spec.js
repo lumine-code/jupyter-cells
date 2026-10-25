@@ -6,6 +6,7 @@ describe("Cell indexes after syntax failures", () => {
   let editor, error;
   beforeEach(() => {
     editor = new TextEditor();
+    spyOn(editor, "getGrammar").and.returnValue({ scopeName: "source.python" });
     editor.setText("# %%\nvalue = 1\n");
     editor.getBuffer().getLanguageMode().asynchronousSyntax = true;
     error = new Error("Parser unavailable");
