@@ -487,6 +487,9 @@ describe("settled typed cell descriptors", () => {
   it("classifies without copying body text and keeps lazy source on its original revision", async () => {
     await open("# %% [markdown]\n# Original heading\n", "language-ipython", "cell-model.ipy");
     const reads = spyOn(editor, "getTextInBufferRange").and.callThrough();
+    const wholeRead = spyOn(editor.getBuffer(), "getText").and.throwError(
+      "eager descriptor string",
+    );
     const descriptor = (
       await cells.getCellDescriptors(editor, [
         [1, 0],
@@ -498,14 +501,16 @@ describe("settled typed cell descriptors", () => {
       jasmine.any(Function),
     );
     expect(reads).not.toHaveBeenCalled();
+    expect(wholeRead).not.toHaveBeenCalled();
+    wholeRead.and.callThrough();
     editor.setText("# %% [raw]\nNew bytes\n");
     const fresh = (await cells.getCellDescriptors(editor))[0];
     expect(fresh.cellType).toBe("raw");
     expect(descriptor.source).toBe("# Original heading\n");
     expect(fresh.source).toBe("New bytes\n");
-    expect(reads).toHaveBeenCalledTimes(1);
+    expect(reads).not.toHaveBeenCalled();
     expect(fresh.source).toBe("New bytes\n");
-    expect(reads).toHaveBeenCalledTimes(1);
+    expect(reads).not.toHaveBeenCalled();
   });
 
   it("retains exact literal line endings when a lazy descriptor outlives its revision", async () => {
