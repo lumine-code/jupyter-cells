@@ -123,6 +123,61 @@ describe("the cell run commands", () => {
     expect(run[2][1].code).not.toContain("#");
   });
 
+  it("checks notebook target snapshots without invoking legacy source getters", async () => {
+    const execution = consume(makeExecution());
+    const item = { isDestroyed: () => false };
+    const owner = { isDestroyed: () => false };
+    const snapshot = editor.getBuffer().getTextSnapshot();
+    const target = (sourceSnapshot) =>
+      Object.defineProperty({ id: "cell", sourceSnapshot }, "source", {
+        get() {
+          throw new Error("Snapshot target source must stay lazy");
+        },
+      });
+    const captured = target(snapshot);
+    let current = target(snapshot);
+    disposables.add(
+      mainModule.consumeJupyterAdapter({
+        getAdapterForItem: (candidate) =>
+          candidate === item
+            ? {
+                getRunTargets: () => [captured],
+                getRunTarget: () => current,
+                getKernelOwner: () => owner,
+              }
+            : null,
+      }),
+    );
+    await require("../lib/run-cells").runCell(null, false, item);
+    expect(execution.calls.length).toBe(1);
+    expect(execution.calls[0][3].targets[0]).toBe(captured);
+    current = target(snapshot.replace(0, 1, "changed"));
+    await require("../lib/run-cells").runCell(null, false, item);
+    expect(execution.calls.length).toBe(1);
+  });
+
+  it("declines a legacy lazy target whose source cost cannot be checked", async () => {
+    const execution = consume(makeExecution());
+    const item = { isDestroyed: () => false };
+    const source = jasmine.createSpy("source getter").and.throwError("unbounded source");
+    const target = Object.defineProperty({ id: "legacy" }, "source", { get: source });
+    disposables.add(
+      mainModule.consumeJupyterAdapter({
+        getAdapterForItem: (candidate) =>
+          candidate === item
+            ? {
+                getRunTargets: () => [target],
+                getRunTarget: () => target,
+                getKernelOwner: () => item,
+              }
+            : null,
+      }),
+    );
+    await require("../lib/run-cells").runCell(null, false, item);
+    expect(source).not.toHaveBeenCalled();
+    expect(execution.calls).toEqual([]);
+  });
+
   it("runs only the cells at and above the cursor for run-all-above", async () => {
     const execution = consume(makeExecution());
     editor.setCursorBufferPosition([3, 0]);

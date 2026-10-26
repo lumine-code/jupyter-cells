@@ -62,7 +62,7 @@
   "consumedServices": {
     "jupyter.adapter": {
       "versions": {
-        "^1.0.0": "consumeJupyterAdapter"
+        "^1.0.0 || ^2.0.0": "consumeJupyterAdapter"
       }
     },
     "jupyter.execution": {
