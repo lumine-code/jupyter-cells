@@ -38,6 +38,21 @@ describe("Cell boundaries with no grammar", () => {
     }
   });
 
+  it("does not paint an old index after real to None to real changes in the same turn", async () => {
+    markers.unwatchEditor(editor);
+    const grammar = editor.getGrammar();
+    const pending = cells.updateCellMarkers(editor);
+    lumine.grammars.assignGrammar(editor, lumine.grammars.nullGrammar);
+    editor.buffer.cellMarkerLayer.clear();
+    editor.setText("# %% Fresh\nfresh = 1\n");
+    lumine.grammars.assignGrammar(editor, grammar);
+
+    await pending;
+    expect(editor.buffer.cellMarkerLayer.getMarkerCount()).toBe(0);
+    await cells.updateCellMarkers(editor);
+    expect(editor.buffer.cellMarkerLayer.getMarkerCount()).toBe(1);
+  });
+
   it("does not settle syntax or read the document while None is selected", async () => {
     lumine.grammars.assignGrammar(editor, lumine.grammars.nullGrammar);
     await conditionPromise(() => editor.buffer.cellMarkerLayer.getMarkerCount() === 0);
