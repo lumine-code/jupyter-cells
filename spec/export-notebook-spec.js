@@ -279,8 +279,9 @@ describe("notebook marker round-trip", () => {
       expect(previous.isDestroyed()).toBe(false);
       expect(previous.getText()).toBe("existing source");
       const [message, options] = warnings.calls.mostRecent().args;
-      expect(message).toContain("source cell 2, line 2");
-      expect(options.detail).toContain("Open the notebook directly");
+      expect(message).toBe("Notebook cannot be converted without changing its source");
+      expect(options.detail).toBe(`Path: ${notebookPath}\nCell: 2\nLine: 2`);
+      expect(options.description).toContain("Open the notebook directly");
       expect(runtimeRequest).not.toHaveBeenCalled();
       expect(await fs.readFile(notebookPath, "utf8")).toBe(serialized);
     });
