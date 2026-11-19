@@ -293,6 +293,18 @@ describe("the code-lens provider", () => {
     expect(invalidated.calls.count()).toBe(1);
   });
 
+  it("scopes a cell index invalidation to its editor", async () => {
+    await provider.codeLenses(editor);
+    const invalidated = jasmine.createSpy("invalidated");
+    disposables.add(provider.onDidInvalidate(invalidated));
+
+    editor.setText(`${markers}\n# %% Another cell\n`);
+    await provider.codeLenses(editor);
+
+    expect(invalidated).toHaveBeenCalledWith({ editor });
+    expect(invalidated).not.toHaveBeenCalledWith({});
+  });
+
   it("emits nothing for a file with no markers", async () => {
     editor.getBuffer().setText("a = 1\nb = 2\n");
     const languageMode = editor.getBuffer().getLanguageMode();
